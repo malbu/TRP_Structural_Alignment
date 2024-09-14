@@ -1,11 +1,40 @@
 import os
 import sys
 from frtmalign_2_msa import *
+import importlib
 
 if len(sys.argv) < 2:
-    raise SystemExit("Usage: python %s <path to paths.txt>" % sys.argv[0])
+    raise SystemExit("Usage: python %s <path to paths.txt> [--logging {original,detailed}]" % sys.argv[0])
 else:
     paths_file = sys.argv[1].strip()
+
+# Check for logging argument
+logging_mode = 'original'
+if len(sys.argv) > 2 and sys.argv[2] == '--logging':
+    if len(sys.argv) > 3 and sys.argv[3] in ['original', 'detailed']:
+        logging_mode = sys.argv[3]
+    else:
+        raise SystemExit("Invalid logging option. Use 'original' or 'detailed'.")
+
+# Import the appropriate module based on logging_mode
+if logging_mode == 'detailed':
+    frtmalign_module = importlib.import_module('frtmalign_2_msa_additional_logging')
+else:
+    frtmalign_module = importlib.import_module('frtmalign_2_msa')
+
+# Use the imported module's functions instead of the original ones
+paths_dic = frtmalign_module.paths_dic
+xml_parser = frtmalign_module.xml_parser
+get_struct = frtmalign_module.get_struct
+strip_tm_chains = frtmalign_module.strip_tm_chains
+batch_frtmalign = frtmalign_module.batch_frtmalign
+frtmalign_2_list = frtmalign_module.frtmalign_2_list
+frtmalign_2_tables = frtmalign_module.frtmalign_2_tables
+batch_align_merger = frtmalign_module.batch_align_merger
+batch_hole = frtmalign_module.batch_hole
+batch_annotation = frtmalign_module.batch_annotation
+ident_sim_calc = frtmalign_module.ident_sim_calc
+
 # set working directory, output directories
 # identify files containing necessary information, including paths to program files (frtmalign, HOLE, pyali), information for each structure
 print('Info: Reading paths.txt.')

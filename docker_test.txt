@@ -1,0 +1,125 @@
+# Use a newer official Python runtime as a parent image
+FROM python:3.10-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    build-essential \
+    git \
+    libboost-all-dev \
+    autoconf \
+    automake \
+    autotools-dev \
+    zlib1g-dev \
+    libbz2-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Miniconda
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /miniconda.sh \
+    && bash /miniconda.sh -b -p /miniconda \
+    && rm /miniconda.sh
+ENV PATH="/miniconda/bin:${PATH}"
+
+# Create a new conda environment
+RUN conda create -n myenv python=3.10 -y
+SHELL ["conda", "run", "-n", "myenv", "/bin/bash", "-c"]
+
+# Install packages using conda
+RUN conda install -c conda-forge -y \
+    numpy=1.23.5 \
+    scipy=1.9.3 \
+    pandas=1.5.2 \
+    matplotlib=3.6.2 \
+    seaborn=0.12.2 \
+    biopython=1.81 \
+    MDAnalysis \
+    mdanalysis \
+    requests
+
+# Install HOLE2 separately
+RUN conda install -c conda-forge -y hole2
+
+# Install pyali from GitHub
+RUN git clone https://github.com/christang/pyali.git \
+    && cd pyali \
+    && python setup.py install \
+    && cd .. \
+    && rm -rf pyali
+
+# Install tmtools using pip
+RUN pip install tmtools
+
+# Copy DSSP to the Docker image
+COPY hssp-3.1.4.tar.gz /tmp/hssp.tar.gz
+
+# Install DSSP from local HSSP source
+RUN tar -xzvf /tmp/hssp.tar.gz -C /tmp \
+    && cd /tmp/hssp-3.1.4 \
+    && ./autogen.sh \
+    && ./configure \
+    && sed -i 's/-Werror//g' Makefile \
+    && make CXXFLAGS="-g -O2 -std=c++11 -pedantic -Wall -Wno-reorder" \
+    && make install \
+    && cd / \
+    && rm -rf /tmp/hssp-3.1.4 /tmp/hssp.tar.gz
+
+# Copy the local Fr-TM-Align source file into the container
+COPY frtmalign_201307.tar.gz /tmp/frtmalign.tar.gz
+
+# Create necessary directories
+RUN mkdir -p /home/TRP-channels/Run1 \
+    && mkdir -p /home/TRP-channels/0_provided_structures \
+    && mkdir -p /home/software/frtmalign
+
+# Install Fr-TM-Align from local source
+RUN tar -xzvf /tmp/frtmalign.tar.gz -C /home/software/frtmalign \
+    && cd /home/software/frtmalign \
+    && if [ -f Makefile ]; then make; fi \
+    && chmod +x frtmalign \
+    && cd / \
+    && rm /tmp/frtmalign.tar.gz
+
+# Copy necessary files
+COPY struct_info191031.xml /home/TRP-channels/Run1/
+COPY simple2.rad /home/TRP-channels/Run1/
+COPY paths.txt /app/
+COPY main.py /app/
+COPY frtmalign_2_msa.py /app/
+
+# Create a verification script
+RUN echo '#!/bin/bash\n\
+echo "Verifying paths..."\n\
+paths=(\n\
+    "/home/TRP-channels/Run1/"\n\
+    "/home/TRP-channels/Run1/struct_info191031.xml"\n\
+    "/home/software/frtmalign/frtmalign"\n\
+    "/home/TRP-channels/0_provided_structures/"\n\
+    "/home/TRP-channels/Run1/simple2.rad"\n\
+    "/usr/local/bin/mkdssp"\n\
+    "/app/paths.txt"\n\
+    "/app/main.py"\n\
+    "/app/frtmalign_2_msa.py"\n\
+)\n\
+for path in "${paths[@]}"; do\n\
+    if [ -e "$path" ]; then\
+        echo "$path exists"\n\
+    else\
+        echo "$path does not exist"\n\
+    fi\n\
+done\n\
+if command -v hole &> /dev/null; then\n\
+    echo "HOLE is installed and in PATH"\n\
+else\n\
+    echo "HOLE is not found in PATH"\n\
+fi\n\
+echo "Verification complete."\n\
+' > /app/verify_paths.sh && chmod +x /app/verify_paths.sh
+
+# Define environment variables
+ENV PATHS_FILE=/app/paths.txt
+
+# Set the default command to run the verification script and then the main.py script
+CMD ["/bin/bash", "-c", "/app/verify_paths.sh && conda run --no-capture-output -n myenv python /app/main.py /app/paths.txt"]

@@ -1,0 +1,70 @@
+# Use a newer official Python runtime as a parent image
+FROM python:3.10-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    build-essential \
+    git \
+    libblas-dev \
+    liblapack-dev \
+    gfortran \
+    libffi-dev \
+    libssl-dev \
+    libhdf5-dev \
+    python3-dev \
+    libtiff5-dev \
+    libfreetype6-dev \
+    libpng-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Miniconda
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /miniconda.sh \
+    && bash /miniconda.sh -b -p /miniconda \
+    && rm /miniconda.sh
+ENV PATH="/miniconda/bin:${PATH}"
+
+# Install HOLE2 using conda
+RUN conda install -c conda-forge -y hole2 \
+    && conda clean -afy
+
+# Upgrade pip and install Python packages
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+    numpy \
+    scipy \
+    seaborn==0.12.2 \
+    biopython==1.81 \
+    pyali==0.1.1 \
+    matplotlib \
+    pandas \
+    MDAnalysis
+
+# Copy DSSP to the Docker image
+COPY hssp-3.1.4.tar.gz /tmp/dssp.tar.gz
+
+# Install DSSP
+RUN tar -xzf /tmp/dssp.tar.gz -C /usr/local/bin/ \
+    && rm /tmp/dssp.tar.gz
+
+# Copy Fr-TM-Align local tarball to the Docker image
+COPY frtmalign_201307.tar.gz /tmp/frtmalign.tar.gz
+
+# Install Fr-TM-Align
+RUN tar -xzf /tmp/frtmalign.tar.gz -C /usr/local/bin/ \
+    && rm /tmp/frtmalign.tar.gz
+
+# Install tmtools (replacing Fr-TM-Align)
+RUN pip install --no-cache-dir tmtools
+
+# Define environment variables
+ENV PATHS_FILE=/app/paths.txt
+
+# Copy the current directory contents into the container at /app
+COPY . /app
+
+# Set the default command to run the main.py script
+CMD ["python", "main.py", "/app/paths.txt"]

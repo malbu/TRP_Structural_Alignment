@@ -1,0 +1,67 @@
+
+FROM python:3.10-slim
+
+
+WORKDIR /app
+
+# dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    build-essential \
+    git \
+    libblas-dev \
+    liblapack-dev \
+    gfortran \
+    libffi-dev \
+    libssl-dev \
+    libhdf5-dev \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# miniconda install since I need conda to install hole2 and mdanalysis
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /miniconda.sh && \
+    bash /miniconda.sh -b -p /miniconda && \
+    rm /miniconda.sh
+
+
+ENV PATH=/miniconda/bin:$PATH
+
+# Copy DSSP  to the Docker image
+COPY hssp-3.1.4.tar.gz /tmp/dssp.tar.gz
+
+# Install DSSP
+RUN tar -xzf /tmp/dssp.tar.gz -C /usr/local/bin/ \
+    && rm /tmp/dssp.tar.gz
+
+# Install HOLE and MDAnalysis using Conda
+RUN conda install -c conda-forge hole2 mdanalysis \
+    && conda clean -afy
+
+# Upgrade pip. this solved some dependencies issue with scipy
+RUN pip install --upgrade pip
+
+# Install numpy first; again dependecy issues here
+RUN pip install --no-cache-dir numpy
+
+# Install other Python packages; scipy is not versioned due to conflicts with mdanalysis 2.0
+RUN pip install --no-cache-dir \
+    scipy \
+    seaborn==0.12.2 \
+    biopython==1.81 \
+    pyali==0.1.1
+	
+# install tmtools (replacing Fr-TM-Align)
+RUN pip install tmtools
+
+# Expose any necessary ports; 
+# EXPOSE 8080
+
+# Define environment variables
+ENV PATHS_FILE=/app/paths.txt
+
+# Copy the current directory contents into the container at /app
+COPY . /app
+
+# Set the default command to run the main.py script
+CMD ["python", "main.py"]

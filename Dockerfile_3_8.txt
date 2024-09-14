@@ -1,0 +1,63 @@
+# Use an official Python runtime as a parent image
+FROM python:3.8-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy the current directory contents into the container at /app
+COPY . /app
+
+
+# Upgrade Pip
+RUN pip install --upgrade pip
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    wget \
+    git \
+    libblas-dev \
+    liblapack-dev \
+    gfortran \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install numpy first
+RUN pip install --no-cache-dir numpy==1.24.0
+
+# Install other Python packages
+RUN pip install --no-cache-dir \
+    mdanalysis==1.0.0 \
+    scipy==1.10.1 \
+    seaborn==0.12.2 \
+    biopython==1.81 \
+    pyali==0.1.1
+
+# Install necessary dependencies (e.g., DSSP)
+RUN apt-get update && apt-get install -y \
+    wget \
+    build-essential \
+    && wget https://swift.cmbi.umcn.nl/gv/dssp/DSSP_3_1_4_linux_64bit.tar.gz \
+    && tar -xzf DSSP_3_1_4_linux_64bit.tar.gz \
+    && mv dssp-3.1.4 /usr/local/bin/dssp \
+    && rm DSSP_3_1_4_linux_64bit.tar.gz
+
+# Install HOLE
+RUN wget http://www.holeprogram.org/Hole2/exe/linux/hole.tar.gz \
+    && tar -xzf hole.tar.gz \
+    && mv hole2/exe/hole /usr/local/bin/hole \
+    && rm -rf hole.tar.gz hole2
+
+# Install Fr-TM-Align
+RUN wget https://zhanggroup.org/Fast_Transmembrane_TM-align/frtmalign_linux.tar.gz \
+    && tar -xzf frtmalign_linux.tar.gz \
+    && mv frtmalign /usr/local/bin/frtmalign \
+    && rm frtmalign_linux.tar.gz
+
+# Expose any necessary ports (if applicable)
+# EXPOSE 8080
+
+# Define environment variables
+ENV PATHS_FILE=/app/paths.txt
+
+# Set the default command to run the main.py script
+CMD ["python", "main.py"]

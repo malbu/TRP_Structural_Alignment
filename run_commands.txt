@@ -1,0 +1,4 @@
+docker run -it --entrypoint /bin/bash trp_channel_alignment_no_cluster_2
+docker build --no-cache -t trp_channel_alignment_no_cluster_2 .
+
+python ./main.py ./paths.txt --logging detailed $2>1|tee output.log

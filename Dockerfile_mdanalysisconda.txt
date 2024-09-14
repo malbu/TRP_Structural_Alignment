@@ -1,0 +1,53 @@
+# Use a newer official Python runtime as a parent image
+FROM python:3.10-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Install system dependencies and Miniconda
+RUN apt-get update && apt-get install -y \
+    wget \
+    build-essential \
+    git \
+    libblas-dev \
+    liblapack-dev \
+    gfortran \
+    libffi-dev \
+    libssl-dev \
+    libhdf5-dev \
+    python3-dev \
+    && wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /miniconda.sh \
+    && bash /miniconda.sh -b -p /miniconda \
+    && rm /miniconda.sh \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set PATH to include conda
+ENV PATH=/miniconda/bin:$PATH
+
+# Copy and install DSSP
+COPY hssp-3.1.4.tar.gz /tmp/dssp.tar.gz
+RUN tar -xzf /tmp/dssp.tar.gz -C /usr/local/bin/ \
+    && rm /tmp/dssp.tar.gz
+
+# Install HOLE and MDAnalysis using Conda
+RUN conda install -c conda-forge hole2 mdanalysis \
+    && conda clean -afy
+
+# Upgrade pip and install remaining Python packages
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir numpy \
+    && pip install --no-cache-dir \
+        scipy \
+        seaborn \
+        biopython \
+        pyali \
+        tmtools
+
+# Define environment variables
+ENV PATHS_FILE=/app/paths.txt
+
+# Copy the current directory contents into the container at /app
+COPY . /app
+
+# Set the default command to run the main.py script
+CMD ["python", "main.py"]

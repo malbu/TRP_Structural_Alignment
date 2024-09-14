@@ -1,0 +1,3 @@
+fixed infinite loop in main_tmsc.f  in
+      subroutine cal_tmscore (d,d0,n_ali,nstat,score,i_ali,n_cut)
+for a small protein where alignment has <3 residues

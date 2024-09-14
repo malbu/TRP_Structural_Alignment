@@ -20,7 +20,9 @@ from Bio import AlignIO
 from Bio.PDB.DSSP import DSSP, dssp_dict_from_pdb_file
 from Bio.PDB.PDBParser import PDBParser
 from Bio.Seq import Seq
-from MDAnalysis.analysis.hole import HOLE
+from MDAnalysis.analysis import hole2
+#import MDAnalysis.analysis.hole2
+#print(dir(MDAnalysis.analysis.hole2))
 from scipy.cluster.hierarchy import dendrogram, linkage, leaves_list
 try:
   from pyali.mrgali import *
@@ -33,21 +35,23 @@ except:
 def paths_dic(locations='./paths.txt'):
     # read paths to directories, files and executables
     paths = {}
-    f = open(locations, 'r')
-    for line in f:
-        if not line.startswith('#'):
-            fields = line.split('\t')
-            if len(fields) >= 2:
-                if fields[0].strip() == 'work_dir':
-                    paths['work_dir'] = os.path.abspath(fields[1].strip()) + '/'
+    with open(locations, 'r') as f:
+        for line in f:
+            if not line.strip().startswith('#'):
+                fields = line.strip().split('\t')
+                if len(fields) >= 2:
+                    key = fields[0].strip()
+                    value = fields[1].strip()
+                    if key == 'work_dir':
+                        paths['work_dir'] = os.path.abspath(value) + '/'
+                    else:
+                        paths[key] = value
+                elif fields[0].strip() == 'work_dir':
+                    print('Info: Setting working directory to current directory, ' + os.getcwd() + '/. Change paths.txt for an alternative location.')
+                    paths['work_dir'] = os.getcwd() + '/'
                 else:
-                    paths[fields[0].strip()] = fields[1].strip()
-            elif fields[0].strip() == 'work_dir':
-                print('Info: Setting working directory to current directory, ' + os.getcwd() + '/. Change paths.txt for an alternative location.')
-                paths[fields[0].strip()] = os.getcwd() + '/'
-            else:
-                raise SystemExit('Error: Path for ' + fields[0] + ' not set in paths.txt.')
-    f.close()
+                    raise SystemExit('Error: Path for ' + fields[0].strip() + ' not set in paths.txt.')
+
     try:
         os.mkdir(paths['work_dir'])
     except OSError as exc:
