@@ -304,312 +304,6 @@ def strip_tm_chains(wkdir,inputf,pdb_path,chains_data):
                 else:
                     atom=line[12:16].strip()
                     elem=atom[0]
-import argparse
-import errno
-import glob
-import itertools
-import matplotlib.patches as mpatches
-import matplotlib.pyplot as plt
-import multiprocessing as mp
-import numpy as np
-import os 
-import pandas as pd
-import pickle
-import re
-import requests
-import seaborn as sns
-import shutil
-import subprocess
-import sys
-import tempfile
-from Bio import AlignIO
-from Bio.PDB.DSSP import DSSP, dssp_dict_from_pdb_file
-from Bio.PDB.PDBParser import PDBParser
-from Bio.Seq import Seq
-from MDAnalysis.analysis import hole2
-import logging
-import shutil
-import time
-from functools import wraps
-#import MDAnalysis.analysis.hole2
-#print(dir(MDAnalysis.analysis.hole2))
-from scipy.cluster.hierarchy import dendrogram, linkage, leaves_list
-try:
-  from pyali.mrgali import *
-except:
-  print("[ERROR]: pyali has not been installed.  To install, run `python setup.py install` from project directory.")
-
-#import subprocess
-#from unittest import mock
-
-
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Create a separate logger for timing information
-timing_logger = logging.getLogger('timing')
-timing_logger.setLevel(logging.DEBUG)
-timing_handler = logging.StreamHandler()
-timing_handler.setFormatter(logging.Formatter('%(asctime)s.%(msecs)03d - TIMING - %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
-timing_logger.addHandler(timing_handler)
-
-def log_execution_time(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        start_time = time.time()
-        result = func(*args, **kwargs)
-        end_time = time.time()
-        timing_logger.info(f"{func.__name__} executed in {end_time - start_time:.2f} seconds")
-        return result
-    return wrapper
-
-def paths_dic(locations='./paths.txt'):
-    logging.info(f"Reading paths from {locations}")
-    paths = {}
-    with open(locations, 'r') as f:
-        for line in f:
-            if not line.strip().startswith('#'):
-                fields = line.strip().split('\t')
-                if len(fields) >= 2:
-                    key = fields[0].strip()
-                    value = fields[1].strip()
-                    if key == 'work_dir':
-                        paths['work_dir'] = os.path.abspath(value) + '/'
-                    else:
-                        paths[key] = value
-                elif fields[0].strip() == 'work_dir':
-                    print('Info: Setting working directory to current directory, ' + os.getcwd() + '/. Change paths.txt for an alternative location.')
-                    paths['work_dir'] = os.getcwd() + '/'
-                else:
-                    raise SystemExit('Error: Path for ' + fields[0].strip() + ' not set in paths.txt.')
-
-    try:
-        os.mkdir(paths['work_dir'])
-    except OSError as exc:
-        if exc.errno != errno.EEXIST:
-            raise
-        else:
-            os.chdir(paths['work_dir'])
-    
-    # establish project's subdirectory structure
-    paths['pdb_dir'] = paths['work_dir'] + '1_original_structures_OPM/'
-    paths['clean_dir'] = paths['work_dir'] + '2_clean_structures/'
-    paths['frtmalign_dir'] = paths['work_dir'] + '3_aligned_structures/'
-    try:
-        os.mkdir(paths['pdb_dir'])
-    except OSError as exc:
-        if exc.errno != errno.EEXIST:
-            raise
-        pass
-
-    try:
-        os.mkdir(paths['clean_dir'])
-    except OSError as exc:
-        if exc.errno != errno.EEXIST:
-            raise
-        pass
-                                       
-    try:
-        os.mkdir(paths['frtmalign_dir'])
-    except OSError as exc:
-        if exc.errno != errno.EEXIST:
-            raise
-        pass
-
-    if not os.path.exists(paths['structs_info']):
-        raise SystemExit(paths['structs_info']+' path to .xml file specified in paths.txt does not exist')
-    if not os.path.exists(paths['frtmalign']):
-        raise SystemExit(paths['frtmalign']+' path to Fr-TM-Align executable specified in paths.txt does not exist')
-    if not os.path.exists(paths['hole']):
-        raise SystemExit(paths['hole']+' path to HOLE executable specified in paths.txt does not exist')
-    if not os.path.exists(paths['vdw_radius_file']):
-        raise SystemExit(paths['vdw_radius_file']+' path to Van der Waals radius file specified in paths.txt does not exist')
-
-    for dir_path in [paths['work_dir'], paths['pdb_dir'], paths['clean_dir'], paths['frtmalign_dir']]:
-        try:
-            os.makedirs(dir_path, exist_ok=True)
-            logging.info(f"Created directory: {dir_path}")
-        except Exception as e:
-            logging.error(f"Failed to create directory {dir_path}: {str(e)}")
-    
-    return paths
-
-def get_struct(pdbid, savedir, provdir):
-    logging.info(f"Attempting to get structure for PDB ID: {pdbid}")
-    # First tries to get structure from OPM
-    url = 'https://opm-assets.storage.googleapis.com/pdb/' + pdbid + '.pdb'
-    res = requests.get(url, allow_redirects=True)
-    if not res.status_code == 200:
-        # If structure not found in OPM, look for user-provided structure file
-        print("Warning: Found no record in OPM for %s. Checking %s." % (pdbid, provdir))
-        try:
-            shutil.copyfile(provdir+pdbid+'.pdb', savedir+pdbid+ '.pdb')
-        except:
-            # If no user-provided structure file, try to get structure from PDB
-            print("Warning: Found no provided structure file for %s in %s. Checking PDB." %(pdbid, provdir))
-            pdb_url = 'https://files.rcsb.org/download/' + pdbid + '.pdb'
-            pdb_res = requests.get(url, allow_redirects=True)
-            if not pdb_res.status_code == 200:
-                # If structure not found in PDB, print warning and skip structure
-                print("Warning: found no record in OPM, %s, or PDB for %s, so it will be ignored." % (provdir, pdbid))
-                return False
-            else:
-                open(savedir + pdbid + '.pdb', 'wb').write(pdb_res.content)
-                return True
-        return True
-    else:
-        open(savedir + pdbid + '.pdb', 'wb').write(res.content)
-        return True
-
-def xml_parser(xml_file):
-    logging.info(f"Parsing XML file: {xml_file}")
-    xml = open(xml_file, 'r')
-    pdb_dic = {}
-    for line in xml:
-        if line.startswith('</Structure>'):
-            pdbid =''
-        if '<PDBID' in line:
-            pdbid = line.split('"')[1]
-            pdb_dic[pdbid] = {'id': '', 'tm_chains': [], 'subfamily': '','environment': '','method': '', 'ligand':''}
-            pdb_dic[pdbid]['id'] = pdbid
-            #print(pdbid)
-
-        if '<ChainId' in line:
-            chainid = line.split('"')[1]
-            #print(chainid)
-            resid_list = []
-        if '<start' in line:
-            start = line.split('"')[1]
-        if '<end' in line:
-            end = line.split('"')[1]
-            resid_list.append(range(int(start), int(end)))
-        if '</Chain>' in line:
-            #print(pdbid, chainid, resid_list)
-            pdb_dic[pdbid]['tm_chains'].append([chainid, resid_list])
-            chainid = ''
-
-        if '<Subfamily' in line:
-            pdb_dic[pdbid]['subfamily'] = line.split('"')[1]
-        if '<Method' in line:
-            pdb_dic[pdbid]['method'] = line.split('"')[1]
-        if '<Environment' in line:
-            pdb_dic[pdbid]['environment'] = line.split('"')[1]
-        if '<Ligand' in line:
-            pdb_dic[pdbid]['ligand'] = line.split('"')[1]
-
-    xml.close()
-    
-    # convert struct_info_dict into dataframe containing pdbid, tm_chains, subfamily, environment, method, and ligand
-    all_info_list = []
-    for pdbid, info_dict in pdb_dic.items():
-        info_list = [info_dict['id'], info_dict['tm_chains'], info_dict['subfamily'], info_dict['environment'], info_dict['method'], info_dict['ligand']]
-        all_info_list.append(info_list)
-    pdb_df = pd.DataFrame(all_info_list, columns=['PDB ID', 'TM chains', 'Subfamily', 'Environment', 'Method', 'Ligand'])
-
-    #print(pdb_dic)
-    return pdb_dic, pdb_df
-
-
-def from3to1_general(resname):
-  f3t1 = {'ALA' : 'A',
-          'ARG' : 'R',
-          'ASN' : 'N',
-          'ASP' : 'D',
-          'CYS' : 'C',
-          'GLN' : 'Q',
-          'GLU' : 'E',
-          'GLY' : 'G',
-          'HIS' : 'H',
-          'ILE' : 'I',
-          'LEU' : 'L',
-          'LYS' : 'K',
-          'MET' : 'M',
-          'PHE' : 'F',
-          'PRO' : 'P',
-          'SER' : 'S',
-          'THR' : 'T',
-          'TRP' : 'W',
-          'TYR' : 'Y',
-          'VAL' : 'V',
-          'MSE' : 'M'}
-
-  if resname in list(f3t1.keys()):
-    return f3t1[resname]
-  else:
-    return '0'
-
-def strip_tm_chains(wkdir,inputf,pdb_path,chains_data):
-    """
-    Extract only the specified chains atoms that are properly specified and enforce the user-specified chain order.
-    Note that chains_data is a list of the form [['A',[range(2,120),range(240,300)]],['C']], where the ranges specify 
-    the residue ranges of each chain that should be included in the final structure. If chains_data is empty, all 
-    properly specified atoms in the PDB file will be included.
-    Note that TER entries are ignored.
-    Returns the number of residues in the final structure.
-    """
-
-    f=open(pdb_path,'r')
-    altloc=' '
-    flag=0
-    for line in f:
-        if line.startswith("ATOM") and line[12:16].strip()=='CA' and line[16:17]!=' ' and (float(line[54:60])>0.5 or flag==0):
-            altloc=line[16:17]
-            flag=1
-    f.seek(0)
-  
-    if len(chains_data)>0:
-        chains = [i[0] for i in chains_data] # chains = ['A','C'], for example
-    else:
-        chains = ""
-
-    o=open(wkdir+inputf+"_clean.pdb","w+")
-    num=0
-    resid_count = 0
-    LINELEM="{:76s}{:>2s}\n"
-    for ind, chain in enumerate(chains):   
-        atomnames=[]
-        old_resid='-88'
-        f.seek(0)
-        for line in f:
-            if line.startswith("ATOM") and line[21:22]==chain and from3to1_general(line[17:20].strip())!=0:
-                if len(chains_data[ind])>1 and not any([True for k in chains_data[ind][1] if int(line[22:26]) in k]): 
-                    continue
-                
-                if old_resid!='-88' and line[22:26]==old_resid and line[12:16] in atomnames or (line[16:17]!=altloc and line[16:17]!=' '): #sort out disordered atoms
-                    continue
-                elif (old_resid=='-88' or line[22:26]!=old_resid):
-                    old_resid=line[22:26]
-                    resid_count +=1
-                    atomnames=[]
-                    #print(line)
-                atomnames.append(line[12:16])
-
-                if line[76:78].strip()!='': #ensure that the element symbol is included
-                    o.write(line[0:22] + "{:>4s}".format(str(resid_count)) + line[26:])
-                    num+=1
-                else:
-                    atom=line[12:16].strip()
-                    elem=atom[0]
-                    o.write(LINELEM.format(line[0:22] + "{:>4s}".format(str(resid_count)) + line[26:76],elem))
-                    num+=1
-            if line.startswith("HETATM") and line[17:20]=='MSE' and line[21:22]==chain:
-          
-                if len(chains_data[ind])>1 and not any([True for k in chains_data[ind][1] if int(line[22:26]) in k]): # check whether the residue is in the specified atom ranges for the chain
-                    continue
-             
-                if old_resid!='-88' and line[22:26]==old_resid and line[12:16] in atomnames or (line[16:17]!=altloc and line[16:17]!=' '):
-                    continue
-                elif (old_resid=='-88' or line[22:26]!=old_resid):
-                    old_resid=line[22:26]
-                    resid_count +=1
-                    atomnames=[]
-                atomnames.append(line[12:16])
-
-                if line[76:78].strip()!='':
-                    o.write("ATOM  "+line[6:22] + "{:>4s}".format(str(resid_count)) + line[26:])
-                    num+=1
-                else:
-                    atom=line[12:16].strip()
-                    elem=atom[0]
                     o.write("ATOM  "+ line[6:22]+ "{:>4s}".format(str(resid_count)) + line[26:76] +" "+elem+"\n")
                     num+=1
      
@@ -929,6 +623,8 @@ def raise_seq(infile, outfile, seqn):
   out.close()
 
 def align_merger(file_list, outname, width, reference_seq):
+    if not file_list:
+      raise ValueError("No alignment files provided to align_merger.")
     refs, alis, alis_names = [], [], []
     for f in file_list:
         if reference_seq != '':
@@ -1000,48 +696,50 @@ def align_merger(file_list, outname, width, reference_seq):
     return aligned_list
     
 @log_execution_time
-def batch_align_merger(input_directory, order_file):  # input_directory is parent dictionary containing directories for each stationary structure
-  timing_logger.info(f"Starting batch_align_merger with input directory: {input_directory}")
-  order_list = pd.read_csv(order_file, header=0, usecols=['PDB ID']) # can change order of sequences by using a different csv file
-  # make dictionary where the pdbid is the key, index is the value
-  order_dict = {k:v for v,k in order_list.itertuples()}
-  # print(order_dict)
-  for dirname in os.listdir(input_directory):
-    # print(dirname)
-    sta_pdbid = dirname[-4:]
-    if os.path.isdir(input_directory+'/'+dirname):
-      # print('it\'s a directory!')
-      start_time = time.time()
-      filenames = glob.glob(input_directory+dirname + "/*.fasta")
-      sorted_filenames = ['']*len(order_dict)
-      for filename in filenames:
-        mob_pdbid = filename[-15:-11]
-        if sta_pdbid != mob_pdbid:
-          # print(sorted_filenames)
-          sorted_filenames[order_dict[mob_pdbid]]=filename
-      ordered_filenames = [x for x in sorted_filenames if x]
-      outname = input_directory+sta_pdbid+'_full.ali'
-      # print(outname)
-      width = 72
-      ref_seq = sta_pdbid
-      alignment = align_merger(ordered_filenames, outname, width, ref_seq)
-      # print(alignment)
-      # process the multiple sequence alignment to remove - gaps
-      # put the alignment list of tuples into a pandas dataframe with the strings as labels (like I did for aligned distances) and data in the column/row
-      test = list(zip(*alignment))
-      test_seq=[list(str) for str in test[1]]
-      full_alignment = pd.DataFrame(test_seq, index=test[0])
-      full_alignment = full_alignment.transpose()
-      # print(full_alignment)
-      mask = full_alignment['>'+sta_pdbid] != '-'
-      nogap_alignment=full_alignment[mask]
-      # print(nogap_alignment)
-      with open(input_directory+sta_pdbid+'_nogap.ali', 'w') as outfile:
-        for column in nogap_alignment:
-          outfile.write(column+'\n'+''.join(nogap_alignment[column])+'\n')
-      end_time = time.time()
-      timing_logger.info(f"Processed {sta_pdbid} in {end_time - start_time:.2f} seconds")
-  timing_logger.info("Completed batch_align_merger")
+def batch_align_merger(input_directory, order_file):
+    timing_logger.info(f"Starting batch_align_merger with input directory: {input_directory}")
+    order_list = pd.read_csv(order_file, header=0, usecols=['PDB ID'])
+    order_dict = {k: v for v, k in order_list.itertuples()}
+    
+    for dirname in os.listdir(input_directory):
+        sta_pdbid = dirname[-4:]
+        dir_path = os.path.join(input_directory, dirname)
+        if os.path.isdir(dir_path):
+            start_time = time.time()
+            filenames = glob.glob(os.path.join(dir_path, "*.fasta"))
+            sorted_filenames = [''] * len(order_dict)
+            
+            for filename in filenames:
+                # Extract mobile PDB ID from filename
+                base_filename = os.path.basename(filename)
+                parts = base_filename.split('_')
+                if len(parts) >= 2:
+                    mob_pdbid = parts[0]
+                    if sta_pdbid != mob_pdbid and mob_pdbid in order_dict:
+                        sorted_filenames[order_dict[mob_pdbid]] = filename
+            
+            ordered_filenames = [x for x in sorted_filenames if x]
+            if not ordered_filenames:
+                timing_logger.warning(f"No alignment files found for stationary PDB ID {sta_pdbid}.")
+                continue
+            
+            outname = os.path.join(input_directory, f"{sta_pdbid}_full.ali")
+            width = 72
+            ref_seq = sta_pdbid
+            alignment = align_merger(ordered_filenames, outname, width, ref_seq)
+            
+            # Process the multiple sequence alignment to remove gaps
+            test = list(zip(*alignment))
+            test_seq = [list(str) for str in test[1]]
+            full_alignment = pd.DataFrame(test_seq, index=test[0]).transpose()
+            mask = full_alignment[f">{sta_pdbid}"] != '-'
+            nogap_alignment = full_alignment[mask]
+            with open(os.path.join(input_directory, f"{sta_pdbid}_nogap.ali"), 'w') as outfile:
+                for column in nogap_alignment:
+                    outfile.write(column + '\n' + ''.join(nogap_alignment[column]) + '\n')
+            end_time = time.time()
+            timing_logger.info(f"Processed {sta_pdbid} in {end_time - start_time:.2f} seconds")
+    timing_logger.info("Completed batch_align_merger")
 
 def from_name_to_vdwr(pdb_atom_name):
   #from simple radius file in hole2, with extra 0.10A added as buffer
