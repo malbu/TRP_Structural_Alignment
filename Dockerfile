@@ -108,6 +108,7 @@ COPY paths.txt /app/
 COPY main.py /app/
 COPY frtmalign_2_msa.py /app/
 COPY frtmalign_2_msa_additional_logging.py /app/
+COPY frtmalign_2_msa_holeanalysis.py /app/
 
 # Create a verification script
 RUN echo '#!/bin/bash' > /app/verify_paths.sh && \
@@ -123,6 +124,7 @@ RUN echo '#!/bin/bash' > /app/verify_paths.sh && \
     echo '    "/app/main.py"' >> /app/verify_paths.sh && \
     echo '    "/app/frtmalign_2_msa.py"' >> /app/verify_paths.sh && \
     echo '    "/app/frtmalign_2_msa_additional_logging.py"' >> /app/verify_paths.sh && \
+    echo '    "/app/frtmalign_2_msa_holeanalysis.py"' >> /app/verify_paths.sh && \
     echo ')' >> /app/verify_paths.sh && \
     echo 'for path in "${paths[@]}"; do' >> /app/verify_paths.sh && \
     echo '    if [ -e "$path" ]; then' >> /app/verify_paths.sh && \

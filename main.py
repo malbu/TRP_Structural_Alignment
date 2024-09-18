@@ -4,21 +4,28 @@ from frtmalign_2_msa import *
 import importlib
 
 if len(sys.argv) < 2:
-    raise SystemExit("Usage: python %s <path to paths.txt> [--logging {original,detailed}]" % sys.argv[0])
+    raise SystemExit("Usage: python %s <path to paths.txt> [--logging {original,detailed}] [--run-hole-analysis]" % sys.argv[0])
 else:
     paths_file = sys.argv[1].strip()
 
 # Check for logging argument
 logging_mode = 'original'
-if len(sys.argv) > 2 and sys.argv[2] == '--logging':
-    if len(sys.argv) > 3 and sys.argv[3] in ['original', 'detailed']:
-        logging_mode = sys.argv[3]
-    else:
-        raise SystemExit("Invalid logging option. Use 'original' or 'detailed'.")
+run_hole_analysis = False
+if len(sys.argv) > 2:
+    for i in range(2, len(sys.argv)):
+        if sys.argv[i] == '--logging':
+            if i + 1 < len(sys.argv) and sys.argv[i + 1] in ['original', 'detailed']:
+                logging_mode = sys.argv[i + 1]
+            else:
+                raise SystemExit("Invalid logging option. Use 'original' or 'detailed'.")
+        elif sys.argv[i] == '--run-hole-analysis':
+            run_hole_analysis = True
 
-# Import the appropriate module based on logging_mode
+# Import the appropriate module based on logging_mode and run_hole_analysis
 if logging_mode == 'detailed':
     frtmalign_module = importlib.import_module('frtmalign_2_msa_additional_logging')
+elif run_hole_analysis:
+    frtmalign_module = importlib.import_module('frtmalign_2_msa_holeanalysis')
 else:
     frtmalign_module = importlib.import_module('frtmalign_2_msa')
 
