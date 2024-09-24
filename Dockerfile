@@ -15,8 +15,9 @@ RUN apt-get update && apt-get install -y \
     autotools-dev \
     zlib1g-dev \
     libbz2-dev \
+    gfortran \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
-
 
 # Install Miniconda
 RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /miniconda.sh \
@@ -38,13 +39,14 @@ RUN conda install -c conda-forge -y \
     biopython=1.81 \
     MDAnalysis \
     mdanalysis \
-    requests
+    requests \
+    hole2
 
-# Install HOLE2 separately
-#RUN conda install -c conda-forge -y hole2
+# Install mdahole2 from GitHub
+RUN pip install git+https://github.com/MDAnalysis/mdahole2.git
 
-# Install hole2-mdakit
-RUN pip install hole2-mdakit
+# Verify mdahole2 installation
+RUN python -c "import mdahole2; print('mdahole2 imported successfully')"
 
 # Install pyali from GitHub
 RUN git clone https://github.com/christang/pyali.git \
@@ -56,11 +58,8 @@ RUN git clone https://github.com/christang/pyali.git \
 # Install tmtools using pip
 RUN pip install tmtools
 
-# Copy DSSP to the Docker image
+# Copy DSSP to the Docker image and install it
 COPY hssp-3.1.4.tar.gz /tmp/hssp.tar.gz
-
-
-# Install DSSP from local HSSP source
 RUN tar -xzvf /tmp/hssp.tar.gz -C /tmp \
     && cd /tmp/hssp-3.1.4 \
     && ./autogen.sh \
@@ -73,46 +72,24 @@ RUN tar -xzvf /tmp/hssp.tar.gz -C /tmp \
     && if [ -f /usr/local/bin/mkhssp ]; then ln -s /usr/local/bin/mkhssp /usr/local/bin/mkdssp; fi \
     && ln -s /usr/local/bin/mkdssp /usr/local/bin/dssp
 
-# Ensure HOLE is in the PATH and create a symlink
+# Ensure conda environment is in the PATH
 ENV PATH="/miniconda/envs/myenv/bin:$PATH"
-#RUN ln -s /miniconda/envs/myenv/bin/hole /usr/local/bin/hole
 
-# Ensure hole2-mdakit is in the PATH
-RUN ln -s /miniconda/envs/myenv/bin/hole2 /usr/local/bin/hole
-
-
-# Install gfortran and unzip for Fr-TM-Align compilation
-RUN apt-get update && apt-get install -y gfortran unzip && rm -rf /var/lib/apt/lists/*
-
-# Create necessary directories
-RUN mkdir -p /home/TRP-channels/Run1 && \
-    mkdir -p /home/TRP-channels/0_provided_structures && \
-    mkdir -p /home/software/frtmalign
-
-# Copy Fr-TM-Align source
+# Fr-TM-Align setup
+RUN mkdir -p /home/TRP-channels/Run1 /home/TRP-channels/0_provided_structures /home/software/frtmalign
 COPY frtmalign_201307.zip /tmp/frtmalign.zip
-
-# Extract Fr-TM-Align source and compile
-RUN unzip /tmp/frtmalign.zip -d /home/software/frtmalign && \
-    cd /home/software/frtmalign/frtmalign_201307/frtmalign && \
-    make
-
-# Move executable and clean up
-RUN cd /home/software/frtmalign && \
-    mv frtmalign_201307/frtmalign/frtmalign . && \
-    rm -rf frtmalign_201307 && \
-    chmod 755 frtmalign && \
-    rm /tmp/frtmalign.zip
-
+RUN unzip /tmp/frtmalign.zip -d /home/software/frtmalign \
+    && cd /home/software/frtmalign/frtmalign_201307/frtmalign \
+    && make \
+    && mv frtmalign /home/software/frtmalign/ \
+    && cd /home/software/frtmalign \
+    && rm -rf frtmalign_201307 \
+    && chmod 755 frtmalign \
+    && rm /tmp/frtmalign.zip
 
 # Copy necessary files
-COPY struct_info191031.xml /home/TRP-channels/Run1/
-COPY simple2.rad /home/TRP-channels/Run1/
-COPY paths.txt /app/
-COPY main.py /app/
-COPY frtmalign_2_msa.py /app/
-COPY frtmalign_2_msa_additional_logging.py /app/
-COPY frtmalign_2_msa_holeanalysis.py /app/
+COPY struct_info191031.xml simple2.rad /home/TRP-channels/Run1/
+COPY paths.txt main.py frtmalign_2_msa.py frtmalign_2_msa_additional_logging.py frtmalign_2_msa_holeanalysis.py /app/
 
 # Create a verification script
 RUN echo '#!/bin/bash' > /app/verify_paths.sh && \
@@ -148,5 +125,5 @@ RUN echo '#!/bin/bash' > /app/verify_paths.sh && \
 # Define environment variables
 ENV PATHS_FILE=/app/paths.txt
 
-# Set the default command to run the verification script and then the main.py script with detailed logging
+# Set the default command
 CMD ["/bin/bash", "-c", "/app/verify_paths.sh && conda run --no-capture-output -n myenv python /app/main.py /app/paths.txt --logging detailed"]

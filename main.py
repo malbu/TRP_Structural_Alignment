@@ -3,6 +3,15 @@ import sys
 from frtmalign_2_msa import *
 import importlib
 
+def check_hole_executable():
+    hole_path = "/miniconda/envs/myenv/bin/hole"
+    if not os.path.exists(hole_path):
+        print(f"HOLE executable not found at {hole_path}. Please ensure HOLE is installed correctly.")
+        sys.exit(1)
+    return hole_path
+
+
+
 if len(sys.argv) < 2:
     raise SystemExit("Usage: python %s <path to paths.txt> [--logging {original,detailed}] [--run-hole-analysis]" % sys.argv[0])
 else:
@@ -89,13 +98,20 @@ batch_align_merger(paths['frtmalign_dir'], paths['frtmalign_dir']+'stationary_cl
 
 # perform HOLE pore radius analysis for each structure and determine minimum radius of each residue
 # save HOLE output files in paths['frtmalign_dir']
+#print('Info: Running permeation pathway HOLE profile analysis on structures aligned to reference structure '+paths['hole_reference_struct'])
+#batch_hole(paths['frtmalign_dir'], struct_info_df, paths['hole'], paths['hole_reference_struct'], paths['vdw_radius_file'], paths['hole_reference_pore_point'])
+# Check for HOLE executable
+check_hole_executable()
+
 print('Info: Running permeation pathway HOLE profile analysis on structures aligned to reference structure '+paths['hole_reference_struct'])
-batch_hole(paths['frtmalign_dir'], struct_info_df, paths['hole'], paths['hole_reference_struct'], paths['vdw_radius_file'], paths['hole_reference_pore_point'])
+batch_hole(paths['frtmalign_dir'], struct_info_df, paths['hole_reference_struct'], paths['vdw_radius_file'], paths['hole_reference_pore_point'])
 
 # create Jalview annotation file for minimum radius of each residue in full and nogap multiple sequence alignments
 # perform DSSP secondary structure analysis for each structure and determine secondary structure of each residue
 # create pseudo-fasta file containing secondary structure of each residue in full and nogap multiple sequence alignments
 # save output files in paths['frtmalign_dir']
+#print('Info: Running secondary structure dssp analysis on structures aligned to reference structure '+paths['hole_reference_struct']+' and making HOLE radius annotation files and dssp pseudo-FASTA files.')
+#batch_annotation(paths['frtmalign_dir'], paths['hole_reference_struct'], paths['norm_max_radius'], paths['clean_dir'])
 print('Info: Running secondary structure dssp analysis on structures aligned to reference structure '+paths['hole_reference_struct']+' and making HOLE radius annotation files and dssp pseudo-FASTA files.')
 batch_annotation(paths['frtmalign_dir'], paths['hole_reference_struct'], paths['norm_max_radius'], paths['clean_dir'])
 

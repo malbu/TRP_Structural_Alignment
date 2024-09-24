@@ -20,7 +20,10 @@ from Bio import AlignIO
 from Bio.PDB.DSSP import DSSP, dssp_dict_from_pdb_file
 from Bio.PDB.PDBParser import PDBParser
 from Bio.Seq import Seq
-from MDAnalysis.analysis.hole2 import HoleAnalysis
+#from MDAnalysis.analysis.hole2 import HoleAnalysis
+#from hole2_mdakit import HoleAnalysis
+#from mdahole2 import HoleAnalysis
+from mdahole2.analysis import HoleAnalysis
 from MDAnalysis.topology.guessers import guess_atom_element
 from MDAnalysis import Universe
 import logging
@@ -115,8 +118,8 @@ def paths_dic(locations='./paths.txt'):
         raise SystemExit(paths['structs_info']+' path to .xml file specified in paths.txt does not exist')
     if not os.path.exists(paths['frtmalign']):
         raise SystemExit(paths['frtmalign']+' path to Fr-TM-Align executable specified in paths.txt does not exist')
-    if not os.path.exists(paths['hole']):
-        raise SystemExit(paths['hole']+' path to HOLE executable specified in paths.txt does not exist')
+    #if not os.path.exists(paths['hole']):
+    #    raise SystemExit(paths['hole']+' path to HOLE executable specified in paths.txt does not exist')
     if not os.path.exists(paths['vdw_radius_file']):
         raise SystemExit(paths['vdw_radius_file']+' path to Van der Waals radius file specified in paths.txt does not exist')
 
@@ -760,17 +763,17 @@ def calc_dist(coord1, coord2):
   return np.sqrt(((coord1[0]-coord2[0])**2)+((coord1[1]-coord2[1])**2)+((coord1[2]-coord2[2])**2))
 
 @log_execution_time
-def batch_hole(directory_in, category_df, hole_path, ref_struct, vdw_file, pore_point):
-  timing_logger.info("Starting batch_hole")
-  input_df = category_df.set_index('PDB ID')
-  arg_list = []
-  for filename in glob.glob(directory_in+"stationary_%s/*_full_align.pdb" %(ref_struct)):
-    short_filename = filename[-24:-15]
-    pdb_id = short_filename[0:4]
-    out_dir = os.path.split(filename)[0] # places the output files into the same directory as the original coordinate file
-    arg_list.append((filename, short_filename, pdb_id, out_dir, hole_path, input_df))
-    single_hole(filename, short_filename, pdb_id, out_dir, hole_path, input_df, vdw_file, pore_point)
-  timing_logger.info("Completed batch_hole")
+def batch_hole(directory_in, category_df, ref_struct, vdw_file, pore_point):
+    timing_logger.info("Starting batch_hole")
+    input_df = category_df.set_index('PDB ID')
+    arg_list = []
+    for filename in glob.glob(directory_in+"stationary_%s/*_full_align.pdb" %(ref_struct)):
+        short_filename = filename[-24:-15]
+        pdb_id = short_filename[0:4]
+        out_dir = os.path.split(filename)[0]
+        arg_list.append((filename, short_filename, pdb_id, out_dir, input_df))
+        single_hole(filename, short_filename, pdb_id, out_dir, input_df, vdw_file, pore_point)
+    timing_logger.info("Completed batch_hole")
     #print(out_dir+"/"+short_filename+"_hole_out.txt", out_dir+"/"+short_filename+"_hole.pdb")
   #n_cpus = mp.cpu_count()
   #pool = mp.Pool(n_cpus)
@@ -813,7 +816,7 @@ def assign_elements(u):
             # Default or handle unknown elements
             atom.element = 'C'  # You can choose a different default or implement more logic
 
-def single_hole(filename, short_filename, pdb_id, out_dir, hole_path, input_df, vdw_file, pore_point):
+def single_hole(filename, short_filename, pdb_id, out_dir, input_df, vdw_file, pore_point):
     """
     Runs HOLE analysis on a given PDB file using HoleAnalysis from MDAnalysis,
     attempting to automatically determine the pore axis.
@@ -823,29 +826,38 @@ def single_hole(filename, short_filename, pdb_id, out_dir, hole_path, input_df, 
     print(f'm: {short_filename}, s: {pdb_id}')
 
     try:
-        # Initialize Universe with guessing disabled
-        u = Universe(filename, guess_missing_elements=False)
+        # Initialize Universe
+        u = Universe(filename)
         logging.debug(f"Initialized Universe for {filename}")
 
-        # Assign elements manually
-        assign_elements(u)
-        logging.debug("Assigned elements to atoms.")
+        # Guess elements and masses
+        from MDAnalysis.topology import guessers
+        for atom in u.atoms:
+            if not atom.element:
+                atom.element = guessers.guess_atom_element(atom.name)
+            if atom.mass == 0:
+                atom.mass = guessers.guess_atom_mass(atom.element)
 
-        # Initialize HoleAnalysis with minimal parameters
-        # H = HoleAnalysis(
-        #     u,
-        #     executable=hole_path,
-        #     vdwradii_file=vdw_file,
-        #     ignore_residues=['SOL', 'WAT', 'TIP', 'HOH', 'K', 'NA', 'CL', 'CA', 'MG', 'GD', 'DUM', 'TRS'],
-        #     output_filename=os.path.join(out_dir, f"{short_filename}_hole.out")
-        # )
-                # Initialize HoleAnalysis with parameters matching the class definition
-        # Initialize HoleAnalysis with minimal parameters
+        # Use the correct HOLE executable path
+        hole_executable = "/miniconda/envs/myenv/bin/hole"
+
+        # Process pore_point
+        if pore_point:
+            if isinstance(pore_point, str):
+                pore_point = [float(x) for x in pore_point.strip('[]').split(',')]
+            elif isinstance(pore_point, (list, tuple)) and len(pore_point) == 3:
+                pore_point = [float(x) for x in pore_point]
+            else:
+                logging.warning(f"Invalid pore_point format: {pore_point}. Using None.")
+                pore_point = None
+
+        # Initialize HoleAnalysis
         H = HoleAnalysis(
             u,
-            executable=hole_path,
+            executable=hole_executable,
             vdwradii_file=vdw_file,
-            ignore_residues=['SOL', 'WAT', 'TIP', 'HOH', 'K', 'NA', 'CL', 'CA', 'MG', 'GD', 'DUM', 'TRS']
+            ignore_residues=['SOL', 'WAT', 'TIP', 'HOH', 'K', 'NA', 'CL', 'CA', 'MG', 'GD', 'DUM', 'TRS'],
+            cpoint=pore_point
         )
         logging.debug(f"Initialized HoleAnalysis for {short_filename}")
 
@@ -854,7 +866,7 @@ def single_hole(filename, short_filename, pdb_id, out_dir, hole_path, input_df, 
         logging.info(f"HOLE analysis completed for {short_filename}")
 
     except AttributeError as e:
-        logging.error(f"HoleAnalysis class not found in hole2 module: {e}")
+        logging.error(f"HoleAnalysis error: {e}")
         raise
     except Exception as e:
         logging.error(f"Error initializing or running HoleAnalysis: {e}")
@@ -865,11 +877,15 @@ def single_hole(filename, short_filename, pdb_id, out_dir, hole_path, input_df, 
             profile = H.results.profiles[0]
         
             # Print available attributes for debugging
-            print(f"Available attributes in profile: {dir(profile)}")
+            print(f"Available attributes in profile: {profile.dtype.names}")
         
-            # Use 'radius' and 'center' attributes
-            x = profile.radius
-            y = profile.rxncoord
+            # Use 'radius' and 'z' attributes (these are typically the correct ones)
+            if 'radius' in profile.dtype.names and 'z' in profile.dtype.names:
+                x = profile['radius']
+                y = profile['z']
+            else:
+                logging.error(f"Expected 'radius' and 'z' not found in profile. Available fields: {profile.dtype.names}")
+                return
 
             fig, ax = plt.subplots()
             ax.axvline(4.1, linestyle='--', color='silver', label='Hydrated Ca')
@@ -1125,11 +1141,7 @@ def hole_annotation(msa_filename, radius_directory, norm_max_radius):
     logging.info("Completed hole_annotation")
 
 def read_one_radius_file(radius_filename):
-    """
-    Reads a radius CSV file generated by HoleAnalysis and extracts necessary information.
-
-    """
-    pdb_id = os.path.basename(radius_filename).split('_')[0]  # Assumes filename starts with PDB ID
+    pdb_id = os.path.basename(radius_filename).split('_')[0]
     radius_df = pd.read_csv(radius_filename)
 
     if 'res' not in radius_df.columns or 'radius' not in radius_df.columns:
@@ -1137,8 +1149,6 @@ def read_one_radius_file(radius_filename):
         raise ValueError(f"Radius file {radius_filename} missing required columns.")
 
     max_radius = radius_df['radius'].dropna().max()
-
-    # Assuming 'res' column contains residue information; adjust as necessary
     sequence = ''.join(radius_df['res'].astype(str).tolist())
 
     return pdb_id, radius_df['radius'].tolist(), max_radius, sequence
@@ -1306,8 +1316,8 @@ def batch_annotation(input_directory, hole_ref_pdb, norm_max_radius, clean_dir):
     logging.info(f"Starting batch annotation. Reference PDB: {hole_ref_pdb}")
     try:
         norm_max_radius_float = float(norm_max_radius)
-        msa_filename = f"{input_directory}{hole_ref_pdb}_full.ali"
-        radius_directory = f"{input_directory}stationary_{hole_ref_pdb}"
+        msa_filename = os.path.join(input_directory, f"{hole_ref_pdb}_full.ali")
+        radius_directory = os.path.join(input_directory, f"stationary_{hole_ref_pdb}")
         
         logging.info("Running HOLE annotation")
         hole_annotation(msa_filename, radius_directory, norm_max_radius_float)
