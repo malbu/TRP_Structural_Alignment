@@ -770,7 +770,8 @@ def batch_hole(directory_in, category_df, ref_struct, vdw_file, pore_point):
     for filename in glob.glob(directory_in+"stationary_%s/*_full_align.pdb" %(ref_struct)):
         short_filename = filename[-24:-15]
         pdb_id = short_filename[0:4]
-        out_dir = os.path.split(filename)[0]
+        #out_dir = os.path.split(filename)[0]
+        out_dir = os.path.dirname(filename)
         arg_list.append((filename, short_filename, pdb_id, out_dir, input_df))
         single_hole(filename, short_filename, pdb_id, out_dir, input_df, vdw_file, pore_point)
     timing_logger.info("Completed batch_hole")
@@ -816,6 +817,7 @@ def assign_elements(u):
             # Default or handle unknown elements
             atom.element = 'C'  # You can choose a different default or implement more logic
 
+@log_execution_time
 def single_hole(filename, short_filename, pdb_id, out_dir, input_df, vdw_file, pore_point):
     """
     Runs HOLE analysis on a given PDB file using HoleAnalysis from MDAnalysis,
@@ -852,6 +854,8 @@ def single_hole(filename, short_filename, pdb_id, out_dir, input_df, vdw_file, p
                 pore_point = None
 
         # Initialize HoleAnalysis
+        sphpdb_file = os.path.join(out_dir, f"{short_filename}_hole.sph")
+        outfile = os.path.join(out_dir, f"{short_filename}_hole.out")
         H = HoleAnalysis(
             u,
             executable=hole_executable,
@@ -861,89 +865,56 @@ def single_hole(filename, short_filename, pdb_id, out_dir, input_df, vdw_file, p
         )
         logging.debug(f"Initialized HoleAnalysis for {short_filename}")
 
+        # Set the output files
+        H.sphpdb = sphpdb_file
+        H.outfile = outfile
+
         # Run HOLE analysis
         H.run()
         logging.info(f"HOLE analysis completed for {short_filename}")
 
-    except AttributeError as e:
-        logging.error(f"HoleAnalysis error: {e}")
-        raise
-    except Exception as e:
-        logging.error(f"Error initializing or running HoleAnalysis: {e}")
-        raise
-    try:
+
         # Check if the results attribute exists and has data
         if hasattr(H, 'results') and len(H.results.profiles) > 0:
             profile = H.results.profiles[0]
         
             # Print available attributes for debugging
-            print(f"Available attributes in profile: {profile.dtype.names}")
+            logging.debug(f"Available attributes in profile: {profile.dtype.names}")
         
-            # Use 'radius' and 'z' attributes (these are typically the correct ones)
-            if 'radius' in profile.dtype.names and 'z' in profile.dtype.names:
+            # Use 'radius' and 'rxn_coord' attributes
+            if 'rxn_coord' in profile.dtype.names and 'radius' in profile.dtype.names:
                 x = profile['radius']
-                y = profile['z']
-            else:
-                logging.error(f"Expected 'radius' and 'z' not found in profile. Available fields: {profile.dtype.names}")
-                return
+                y = profile['rxn_coord']
 
-            fig, ax = plt.subplots()
-            ax.axvline(4.1, linestyle='--', color='silver', label='Hydrated Ca')
-            ax.axvline(3.6, linestyle=':', color='silver', label='Hydrated Na')
-            ax.axvline(1.0, linestyle='-', color='silver', label='Dehydrated Ca/Na')
-            ax.plot(x, y, label='HOLE Profile')
-            plt.title(pdb_id)
-            plt.xlabel('Radius (Å)')
-            plt.ylabel('Pore coordinate (Å)')
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            plt.xlim(0, 10)
-            plt.ylim(-40, 30)
-            fig.legend(loc='upper right')
-            fig.savefig(os.path.join(out_dir, f"{pdb_id}_hole_plot.png"), dpi=200, bbox_inches="tight")
-            fig.savefig(os.path.join(out_dir, f"{pdb_id}_hole_plot.pdf"), dpi=200, bbox_inches="tight")
-            plt.close(fig)
-            logging.info(f"HOLE profile plot saved for {pdb_id}")
+                fig, ax = plt.subplots()
+                ax.axvline(4.1, linestyle='--', color='silver', label='Hydrated Ca')
+                ax.axvline(3.6, linestyle=':', color='silver', label='Hydrated Na')
+                ax.axvline(1.0, linestyle='-', color='silver', label='Dehydrated Ca/Na')
+                ax.plot(x, y, label='HOLE Profile')
+                plt.title(pdb_id)
+                plt.xlabel('Radius (Å)')
+                plt.ylabel('Pore coordinate (Å)')
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                plt.xlim(0, 10)
+                plt.ylim(-40, 30)
+                fig.legend(loc='upper right')
+                fig.savefig(os.path.join(out_dir, f"{pdb_id}_hole_plot.png"), dpi=200, bbox_inches="tight")
+                fig.savefig(os.path.join(out_dir, f"{pdb_id}_hole_plot.pdf"), dpi=200, bbox_inches="tight")
+                plt.close(fig)
+                logging.info(f"HOLE profile plot saved for {pdb_id}")
+
+                # Save radius data to CSV
+                radius_df = pd.DataFrame({'res': range(len(x)), 'radius': x})
+                radius_csv_path = os.path.join(out_dir, f"{short_filename}_radius.csv")
+                radius_df.to_csv(radius_csv_path, index=False)
+                logging.info(f"Radius data saved to {radius_csv_path}")
+            else:
+                logging.error(f"Expected 'rxn_coord' and 'radius' not found in profile. Available fields: {profile.dtype.names}")
         else:
             logging.warning(f"No profiles found for {short_filename}. Skipping plot generation.")
-    except Exception as e:
-        logging.error(f"Error saving HOLE plot for {pdb_id}: {str(e)}")
-        raise
 
-    # # Save HOLE profile plot
-    # try:
-    #     # Check if the profiles attribute exists and has data
-    #     if hasattr(H, 'profiles') and len(H.profiles) > 0:
-    #         profile = H.profiles[0]
-    #         x = profile.radius
-    #         y = profile.rxncoord
-
-    #         fig, ax = plt.subplots()
-    #         ax.axvline(4.1, linestyle='--', color='silver', label='Hydrated Ca')
-    #         ax.axvline(3.6, linestyle=':', color='silver', label='Hydrated Na')
-    #         ax.axvline(1.0, linestyle='-', color='silver', label='Dehydrated Ca/Na')
-    #         ax.plot(x, y, label='HOLE Profile')
-    #         plt.title(pdb_id)
-    #         plt.xlabel('Radius (Å)')
-    #         plt.ylabel('Pore coordinate (Å)')
-    #         ax.spines['top'].set_visible(False)
-    #         ax.spines['right'].set_visible(False)
-    #         plt.xlim(0, 10)
-    #         plt.ylim(-40, 30)
-    #         fig.legend(loc='upper right')
-    #         fig.savefig(os.path.join(out_dir, f"{pdb_id}_hole_plot.png"), dpi=200, bbox_inches="tight")
-    #         fig.savefig(os.path.join(out_dir, f"{pdb_id}_hole_plot.pdf"), dpi=200, bbox_inches="tight")
-    #         plt.close(fig)
-    #         logging.info(f"HOLE profile plot saved for {pdb_id}")
-    #     else:
-    #         logging.warning(f"No profiles found for {short_filename}. Skipping plot generation.")
-    # except Exception as e:
-    #     logging.error(f"Error saving HOLE plot for {pdb_id}: {e}")
-    #     raise
-
-    # Residue-level analysis
-    try:
-        # Only perform further analysis on structures with four chains 
+        # Residue-level analysis
         if len(input_df.loc[pdb_id, 'TM chains']) != 4:
             logging.info(f"{pdb_id} does not have four chains, skipping residue-level analysis.")
             return
@@ -952,7 +923,6 @@ def single_hole(filename, short_filename, pdb_id, out_dir, input_df, vdw_file, p
         chain_ids = [chain[0] for chain in chain_info]
         residue_ranges = [chain[1] for chain in chain_info]
 
-        # Residue ranges must be identical across chains
         if not all(r == residue_ranges[0] for r in residue_ranges):
             logging.info(f"{pdb_id} does not have the same residue range for all chains, skipping residue-level analysis.")
             return
@@ -961,16 +931,16 @@ def single_hole(filename, short_filename, pdb_id, out_dir, input_df, vdw_file, p
         pdb_parser = PDBParser(QUIET=True)
         structure = pdb_parser.get_structure(pdb_id, filename)
 
-        # Parse HOLE output PDB (sphpdb)
-        hole_pdb_path = os.path.join(out_dir, f"{short_filename}_hole.pdb")
-        hole_structure = pdb_parser.get_structure(f"{short_filename}_hole", hole_pdb_path)
-
-        # Sphere data from HOLE output
+        # Parse HOLE output SPH file
         hole_sph_list = []
-        for atom in hole_structure.get_atoms():
-            coord = atom.get_coord()
-            radius = atom.get_bfactor()
-            hole_sph_list.append([coord[0], coord[1], coord[2], radius])
+        with open(sphpdb_file, 'r') as sph_file:
+            for line in sph_file:
+                if line.startswith('ATOM'):
+                    x = float(line[30:38])
+                    y = float(line[38:46])
+                    z = float(line[46:54])
+                    radius = float(line[54:60])
+                    hole_sph_list.append([x, y, z, radius])
         hole_sph_df = pd.DataFrame(hole_sph_list, columns=['x', 'y', 'z', 'radius'])
 
         residue_level_radius = {}
@@ -1066,6 +1036,9 @@ def hole_annotation(msa_filename, radius_directory, norm_max_radius):
         radius_files = glob.glob(os.path.join(radius_directory, '*_radius.csv'))
         if not radius_files:
             logging.error(f"No radius CSV files found in {radius_directory}.")
+            logging.info(f"Contents of {radius_directory}:")
+            for item in os.listdir(radius_directory):
+                logging.info(f"  {item}")
             raise FileNotFoundError(f"No radius CSV files found in {radius_directory}.")
 
         radius_dict = {}
