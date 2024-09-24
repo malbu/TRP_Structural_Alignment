@@ -777,38 +777,80 @@ def batch_hole(directory_in, category_df, hole_path, ref_struct, vdw_file, pore_
   #results = [pool.apply(single_hole, args=arg_tup) for arg_tup in arg_list]
    
 
+def assign_elements(u):
+    """
+    Assigns element symbols to atoms based on their names.
+    
+    """
+    # Define a mapping from atom name prefixes to element symbols
+    atom_element_mapping = {
+        'C': 'C',
+        'N': 'N',
+        'O': 'O',
+        'S': 'S',
+        'H': 'H',
+        'P': 'P',
+
+    }
+    
+    for atom in u.atoms:
+        # If the element is already assigned, skip
+        if atom.element.strip():
+            continue
+        
+        # Extract the first character of the atom name to infer the element
+        atom_name = atom.name.strip()
+        if not atom_name:
+            atom.element = 'C'  # Default to Carbon if atom name is empty
+            continue
+        
+        first_char = atom_name[0].upper()
+        
+        # Assign element based on the mapping
+        if first_char in atom_element_mapping:
+            atom.element = atom_element_mapping[first_char]
+        else:
+            # Default or handle unknown elements
+            atom.element = 'C'  # You can choose a different default or implement more logic
+
 def single_hole(filename, short_filename, pdb_id, out_dir, hole_path, input_df, vdw_file, pore_point):
     """
-    Runs HOLE analysis on a given PDB file using HoleAnalysis from MDAnalysis.
+    Runs HOLE analysis on a given PDB file using HoleAnalysis from MDAnalysis,
+    attempting to automatically determine the pore axis.
     """
     start_time = time.time()
     timing_logger.info(f"Running HOLE: mobile={short_filename}, stationary={pdb_id}")
     print(f'm: {short_filename}, s: {pdb_id}')
 
     try:
-        # Initialize Universe with guessing disabled to handle manually
+        # Initialize Universe with guessing disabled
         u = Universe(filename, guess_missing_elements=False)
         logging.debug(f"Initialized Universe for {filename}")
 
-        # Assign elements using MDAnalysis's guesser or custom logic
-        u.atoms.elements = guess_atom_element(u.atoms)
+        # Assign elements manually
+        assign_elements(u)
+        logging.debug("Assigned elements to atoms.")
 
-        # Initialize HoleAnalysis with updated parameters
+        # Initialize HoleAnalysis with minimal parameters
+        # H = HoleAnalysis(
+        #     u,
+        #     executable=hole_path,
+        #     vdwradii_file=vdw_file,
+        #     ignore_residues=['SOL', 'WAT', 'TIP', 'HOH', 'K', 'NA', 'CL', 'CA', 'MG', 'GD', 'DUM', 'TRS'],
+        #     output_filename=os.path.join(out_dir, f"{short_filename}_hole.out")
+        # )
+                # Initialize HoleAnalysis with parameters matching the class definition
+        # Initialize HoleAnalysis with minimal parameters
         H = HoleAnalysis(
             u,
-            pore_axis=pore_point,  # Adjust according to current API
-            logfile=os.path.join(out_dir, f"{short_filename}_hole_out.txt"),
             executable=hole_path,
-            ignore_residues=['SOL', 'WAT', 'TIP', 'HOH', 'K', 'NA', 'CL', 'CA', 'MG', 'GD', 'DUM', 'TRS'],
-            steps=100,
-            file_prefix=os.path.join(out_dir, short_filename + "_hole")
-            # Remove or update 'probe_radius' based on API
+            vdwradii_file=vdw_file,
+            ignore_residues=['SOL', 'WAT', 'TIP', 'HOH', 'K', 'NA', 'CL', 'CA', 'MG', 'GD', 'DUM', 'TRS']
         )
         logging.debug(f"Initialized HoleAnalysis for {short_filename}")
 
-        # Run analysis
+        # Run HOLE analysis
         H.run()
-        H.collect()
         logging.info(f"HOLE analysis completed for {short_filename}")
 
     except AttributeError as e:
@@ -817,11 +859,15 @@ def single_hole(filename, short_filename, pdb_id, out_dir, hole_path, input_df, 
     except Exception as e:
         logging.error(f"Error initializing or running HoleAnalysis: {e}")
         raise
-
-    # Save HOLE profile plot
     try:
-        if hasattr(H, 'profiles') and len(H.profiles) > 0:
-            profile = H.profiles[0]
+        # Check if the results attribute exists and has data
+        if hasattr(H, 'results') and len(H.results.profiles) > 0:
+            profile = H.results.profiles[0]
+        
+            # Print available attributes for debugging
+            print(f"Available attributes in profile: {dir(profile)}")
+        
+            # Use 'radius' and 'center' attributes
             x = profile.radius
             y = profile.rxncoord
 
@@ -845,10 +891,41 @@ def single_hole(filename, short_filename, pdb_id, out_dir, hole_path, input_df, 
         else:
             logging.warning(f"No profiles found for {short_filename}. Skipping plot generation.")
     except Exception as e:
-        logging.error(f"Error saving HOLE plot for {pdb_id}: {e}")
+        logging.error(f"Error saving HOLE plot for {pdb_id}: {str(e)}")
         raise
 
-    # Residue-level analysis 
+    # # Save HOLE profile plot
+    # try:
+    #     # Check if the profiles attribute exists and has data
+    #     if hasattr(H, 'profiles') and len(H.profiles) > 0:
+    #         profile = H.profiles[0]
+    #         x = profile.radius
+    #         y = profile.rxncoord
+
+    #         fig, ax = plt.subplots()
+    #         ax.axvline(4.1, linestyle='--', color='silver', label='Hydrated Ca')
+    #         ax.axvline(3.6, linestyle=':', color='silver', label='Hydrated Na')
+    #         ax.axvline(1.0, linestyle='-', color='silver', label='Dehydrated Ca/Na')
+    #         ax.plot(x, y, label='HOLE Profile')
+    #         plt.title(pdb_id)
+    #         plt.xlabel('Radius (Å)')
+    #         plt.ylabel('Pore coordinate (Å)')
+    #         ax.spines['top'].set_visible(False)
+    #         ax.spines['right'].set_visible(False)
+    #         plt.xlim(0, 10)
+    #         plt.ylim(-40, 30)
+    #         fig.legend(loc='upper right')
+    #         fig.savefig(os.path.join(out_dir, f"{pdb_id}_hole_plot.png"), dpi=200, bbox_inches="tight")
+    #         fig.savefig(os.path.join(out_dir, f"{pdb_id}_hole_plot.pdf"), dpi=200, bbox_inches="tight")
+    #         plt.close(fig)
+    #         logging.info(f"HOLE profile plot saved for {pdb_id}")
+    #     else:
+    #         logging.warning(f"No profiles found for {short_filename}. Skipping plot generation.")
+    # except Exception as e:
+    #     logging.error(f"Error saving HOLE plot for {pdb_id}: {e}")
+    #     raise
+
+    # Residue-level analysis
     try:
         # Only perform further analysis on structures with four chains 
         if len(input_df.loc[pdb_id, 'TM chains']) != 4:

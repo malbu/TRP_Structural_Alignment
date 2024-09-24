@@ -41,7 +41,10 @@ RUN conda install -c conda-forge -y \
     requests
 
 # Install HOLE2 separately
-RUN conda install -c conda-forge -y hole2
+#RUN conda install -c conda-forge -y hole2
+
+# Install hole2-mdakit
+RUN pip install hole2-mdakit
 
 # Install pyali from GitHub
 RUN git clone https://github.com/christang/pyali.git \
@@ -72,9 +75,10 @@ RUN tar -xzvf /tmp/hssp.tar.gz -C /tmp \
 
 # Ensure HOLE is in the PATH and create a symlink
 ENV PATH="/miniconda/envs/myenv/bin:$PATH"
-RUN ln -s /miniconda/envs/myenv/bin/hole /usr/local/bin/hole
+#RUN ln -s /miniconda/envs/myenv/bin/hole /usr/local/bin/hole
 
-
+# Ensure hole2-mdakit is in the PATH
+RUN ln -s /miniconda/envs/myenv/bin/hole2 /usr/local/bin/hole
 
 
 # Install gfortran and unzip for Fr-TM-Align compilation
