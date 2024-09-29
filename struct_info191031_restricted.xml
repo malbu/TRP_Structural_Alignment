@@ -1,0 +1,245 @@
+<Structure>
+	<PDBID name="6co7"/>
+	<Chain>
+		<ChainId name="A" />
+		<TMRange>
+			<start value="676" />
+			<end value="1136" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="D" />
+		<TMRange>
+			<start value="676" />
+			<end value="1136" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="C" />
+		<TMRange>
+			<start value="676" />
+			<end value="1136" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="B" />
+		<TMRange>
+			<start value="676" />
+			<end value="1136" />
+		</TMRange>
+	</Chain>
+	<Subfamily name="TRPM" />
+	<Method name="cryo-EM" />
+	<Environment name="detergent" />
+	<Ligand name="activator" />
+</Structure>
+<Structure>
+	<PDBID name="5zx5"/>
+	<Chain>
+		<ChainId name="A" />
+		<TMRange>
+			<start value="720" />
+			<end value="1140" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="B" />
+		<TMRange>
+			<start value="720" />
+			<end value="1140" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="C" />
+		<TMRange>
+			<start value="720" />
+			<end value="1140" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="D" />
+		<TMRange>
+			<start value="720" />
+			<end value="1140" />
+		</TMRange>
+	</Chain>
+	<Subfamily name="TRPM" />
+	<Method name="cryo-EM" />
+	<Environment name="amphipol" />
+	<Ligand name="apo" />
+</Structure>
+<Structure>
+	<PDBID name="6bwf"/>
+	<Chain>
+		<ChainId name="A" />
+		<TMRange>
+			<start value="373" />
+			<end value="791" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="B" />
+		<TMRange>
+			<start value="373" />
+			<end value="791" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="C" />
+		<TMRange>
+			<start value="373" />
+			<end value="791" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="D" />
+		<TMRange>
+			<start value="373" />
+			<end value="791" />
+		</TMRange>
+	</Chain>
+	<Subfamily name="TRPM" />
+	<Method name="cryo-EM" />
+	<Environment name="amphipol" />
+	<Ligand name="apo" />
+</Structure>
+<Structure>
+	<PDBID name="6drj"/>
+	<Chain>
+		<ChainId name="A" />
+		<TMRange>
+			<start value="692" />
+			<end value="1114" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="B" />
+		<TMRange>
+			<start value="692" />
+			<end value="1114" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="C" />
+		<TMRange>
+			<start value="692" />
+			<end value="1114" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="D" />
+		<TMRange>
+			<start value="692" />
+			<end value="1114" />
+		</TMRange>
+	</Chain>
+	<Subfamily name="TRPM" />
+	<Method name="cryo-EM" />
+	<Environment name="detergent" />
+	<Ligand name="activator" />
+</Structure>
+<Structure>
+	<PDBID name="6drk"/>
+	<Chain>
+		<ChainId name="A" />
+		<TMRange>
+			<start value="692" />
+			<end value="1110" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="B" />
+		<TMRange>
+			<start value="692" />
+			<end value="1110" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="C" />
+		<TMRange>
+			<start value="692" />
+			<end value="1110" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="D" />
+		<TMRange>
+			<start value="692" />
+			<end value="1110" />
+		</TMRange>
+	</Chain>
+	<Subfamily name="TRPM" />
+	<Method name="cryo-EM" />
+	<Environment name="detergent" />
+	<Ligand name="apo" />
+</Structure>
+<Structure>
+	<PDBID name="6mix"/>
+	<Chain>
+		<ChainId name="A" />
+		<TMRange>
+			<start value="716" />
+			<end value="1079" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="B" />
+		<TMRange>
+			<start value="716" />
+			<end value="1079" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="C" />
+		<TMRange>
+			<start value="716" />
+			<end value="1079" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="D" />
+		<TMRange>
+			<start value="716" />
+			<end value="1079" />
+		</TMRange>
+	</Chain>
+	<Subfamily name="TRPM" />
+	<Method name="cryo-EM" />
+	<Environment name="detergent" />
+	<Ligand name="apo" />
+</Structure>
+<Structure>
+	<PDBID name="6nr2"/>
+	<Chain>
+		<ChainId name="A" />
+		<TMRange>
+			<start value="655" />
+			<end value="1026" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="B" />
+		<TMRange>
+			<start value="655" />
+			<end value="1026" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="C" />
+		<TMRange>
+			<start value="655" />
+			<end value="1026" />
+		</TMRange>
+	</Chain>
+	<Chain>
+		<ChainId name="D" />
+		<TMRange>
+			<start value="655" />
+			<end value="1026" />
+		</TMRange>
+	</Chain>
+	<Subfamily name="TRPM" />
+	<Method name="cryo-EM" />
+	<Environment name="detergent" />
+	<Ligand name="activator" />
+</Structure>

@@ -1,10 +1,10 @@
 # Name	Path
-work_dir	/home/TRP-channels/Run1/
-structs_info	/home/TRP-channels/Run1/struct_info191031.xml
+work_dir	/app/R1/
+structs_info	/app/R1/struct_info191031.xml
 frtmalign	/home/software/frtmalign/frtmalign
-hole	/usr/local/bin/hole
-provided_struct	/home/TRP-channels/0_provided_structures/
+hole	/miniconda/envs/myenv/bin/hole
+provided_struct	/app/P_structs/
 hole_reference_struct	6co7 
 hole_reference_pore_point	[0.001, 0.004, 6.843]
-vdw_radius_file	/home/TRP-channels/Run1/simple2.rad
+vdw_radius_file	/app/R1/simple2.rad
 norm_max_radius	15

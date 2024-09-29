@@ -21,6 +21,7 @@ from Bio.PDB.DSSP import DSSP, dssp_dict_from_pdb_file
 from Bio.PDB.PDBParser import PDBParser
 from Bio.Seq import Seq
 from MDAnalysis.analysis import hole2
+from mdahole2.analysis.hole import hole
 import logging
 import shutil
 import time
@@ -762,7 +763,7 @@ def batch_hole(directory_in, category_df, hole_path, ref_struct, vdw_file, pore_
   timing_logger.info("Starting batch_hole")
   input_df = category_df.set_index('PDB ID')
   arg_list = []
-  for filename in glob.glob(directory_in+"stationary_%s/*_full_align.pdb" %(ref_struct)):
+  for filename in glob.glob(directory_in+"stationary_%s/*ls" %(ref_struct)):
     short_filename = filename[-24:-15]
     pdb_id = short_filename[0:4]
     out_dir = os.path.split(filename)[0] # places the output files into the same directory as the original coordinate file
@@ -775,26 +776,56 @@ def batch_hole(directory_in, category_df, hole_path, ref_struct, vdw_file, pore_
   #results = [pool.apply(single_hole, args=arg_tup) for arg_tup in arg_list]
    
 def single_hole(filename, short_filename, pdb_id, out_dir, hole_path, input_df, vdw_file, pore_point):
-    H = HOLE(filename, logfile=out_dir+"/"+short_filename+"_hole_out.txt", sphpdb=out_dir+"/"+short_filename+"_hole.pdb", cpoint=pore_point, ignore_residues=['SOL', 'WAT', 'TIP', 'HOH', 'K  ', 'NA ', 'CL ', 'CA ', 'MG ', 'GD ', 'DUM', 'TRS'], radius=vdw_file, executable=hole_path) # ignore any ions that might be in the pore
-    # HOLE will only accept file names that are 70 characters or less. This function ensures that the provided filename is suitable for HOLE.    
-    H.filename = H.check_and_fix_long_filename(H.filename) 
-    H.logfile = H.check_and_fix_long_filename(H.logfile)
-    H.sphpdb = H.check_and_fix_long_filename(H.sphpdb)
-    H.radius = H.check_and_fix_long_filename(H.radius)
-    H.exe = H.check_and_fix_long_filename(H.exe)
+    pore_point_str = ' '.join(map(str, pore_point))
     
+    H = hole(pdbfile=filename, 
+             outfile=out_dir+"/"+short_filename+"_hole_out.txt",
+             sphpdb_file=out_dir+"/"+short_filename+"_hole.pdb", 
+             cpoint=pore_point_str,  
+             ignore_residues=['SOL', 'WAT', 'TIP', 'HOH', 'K  ', 'NA ', 'CL ', 'CA ', 'MG ', 'GD ', 'DUM', 'TRS'], 
+             vdwradii_file=vdw_file, 
+             executable=hole_path)
+    
+    # # Check if H is a dictionary (which it seems to be based on the error)
+    # if isinstance(H, dict):
+    #     # If it's a dictionary, we need to handle it differently
+    #     # You might need to adjust this part based on what's actually in the dictionary
+    #     profiles = H.get('profiles', {})
+    #     if profiles:
+    #         profile = list(profiles.values())[0]
+    #         x = profile.radius
+    #         y = profile.rxncoord
+    #     else:
+    #         logging.error(f"No profiles found in HOLE output for {pdb_id}")
+    #         return
+    # else:
+    #     # If it's not a dictionary, assume it's the expected HOLE object
+    #      H.run()
+    #      H.collect()
+    #     # If it's not a dictionary, assume it's the expected HOLE object
+    #     if hasattr(H, 'results') and len(H.results.profiles) > 0:
+    #         profile = H.results.profiles[0]
+    #         if 'radius' in profile.dtype.names and 'rxn_coord' in profile.dtype.names:
+    #             x = profile['radius']
+    #             y = profile['rxn_coord']
+    #         else:
+    #             logging.error(f"Expected 'radius' and 'rxn_coord' not found in profile for {pdb_id}. Available fields: {profile.dtype.names}")
+    #             return
+    #     else:
+    #         x = list(H.profiles.items())[0][1].radius
+    #         y = list(H.profiles.items())[0][1].rxncoord
+    #         logging.error(f"No profiles found in HOLE output for {pdb_id}")
+    #         return
+
     H.run()
     H.collect()
-    print(short_filename)
-    # this code can be used to pickle HOLE data for later use
-    #profile_dict[pdb_id] = list(H.profiles.items())[0][1]
-    #profiles_dict_outname = out_dir+"/"+short_filename+"_dict.pickle"
-    #with open(profiles_dict_outname, 'wb') as file:
-      #pickle.dump(H.profiles, file)
 
-    # save HOLE profile plot
+    print(short_filename)
+        # save HOLE profile plot
     x = list(H.profiles.items())[0][1].radius
     y = list(H.profiles.items())[0][1].rxncoord
+
+    # Save HOLE profile plot
     fig, ax = plt.subplots()
     ax.axvline(4.1, linestyle='--', color='silver', label='') #hydrated Ca
     ax.axvline(3.6, linestyle=':', color='silver', label='') #hydrated Na
