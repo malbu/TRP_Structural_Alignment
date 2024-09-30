@@ -873,6 +873,14 @@ def single_hole(filename, short_filename, pdb_id, out_dir, input_df, vdw_file, p
         H.run()
         logging.info(f"HOLE analysis completed for {short_filename}")
 
+        # Copy the generated .sph file to the correct location
+        source_sph = "/app/R1/hole000.sph"
+        if os.path.exists(source_sph):
+            shutil.copy2(source_sph, sphpdb_file)
+            logging.info(f"Copied {source_sph} to {sphpdb_file}")
+        else:
+            logging.error(f"Source .sph file not found: {source_sph}")
+
 
         # Check if the results attribute exists and has data
         if hasattr(H, 'results') and len(H.results.profiles) > 0:

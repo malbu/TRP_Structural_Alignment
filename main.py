@@ -104,8 +104,8 @@ batch_align_merger(paths['frtmalign_dir'], paths['frtmalign_dir']+'stationary_cl
 check_hole_executable()
 
 print('Info: Running permeation pathway HOLE profile analysis on structures aligned to reference structure '+paths['hole_reference_struct'])
-batch_hole(paths['frtmalign_dir'], struct_info_df, paths['hole_reference_struct'], paths['vdw_radius_file'], paths['hole_reference_pore_point'])
-#batch_hole(paths['frtmalign_dir'], struct_info_df, paths['hole'], paths['hole_reference_struct'], paths['vdw_radius_file'], paths['hole_reference_pore_point'])
+#batch_hole(paths['frtmalign_dir'], struct_info_df, paths['hole_reference_struct'], paths['vdw_radius_file'], paths['hole_reference_pore_point'])
+batch_hole(paths['frtmalign_dir'], struct_info_df, paths['hole'], paths['hole_reference_struct'], paths['vdw_radius_file'], paths['hole_reference_pore_point'])
 
 # create Jalview annotation file for minimum radius of each residue in full and nogap multiple sequence alignments
 # perform DSSP secondary structure analysis for each structure and determine secondary structure of each residue

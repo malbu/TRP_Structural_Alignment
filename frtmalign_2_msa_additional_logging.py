@@ -763,7 +763,7 @@ def batch_hole(directory_in, category_df, hole_path, ref_struct, vdw_file, pore_
   timing_logger.info("Starting batch_hole")
   input_df = category_df.set_index('PDB ID')
   arg_list = []
-  for filename in glob.glob(directory_in+"stationary_%s/*ls" %(ref_struct)):
+  for filename in glob.glob(directory_in+"stationary_%s/*_full_align.pdb" %(ref_struct)):
     short_filename = filename[-24:-15]
     pdb_id = short_filename[0:4]
     out_dir = os.path.split(filename)[0] # places the output files into the same directory as the original coordinate file
@@ -786,44 +786,26 @@ def single_hole(filename, short_filename, pdb_id, out_dir, hole_path, input_df, 
              vdwradii_file=vdw_file, 
              executable=hole_path)
     
-    # # Check if H is a dictionary (which it seems to be based on the error)
-    # if isinstance(H, dict):
-    #     # If it's a dictionary, we need to handle it differently
-    #     # You might need to adjust this part based on what's actually in the dictionary
-    #     profiles = H.get('profiles', {})
-    #     if profiles:
-    #         profile = list(profiles.values())[0]
-    #         x = profile.radius
-    #         y = profile.rxncoord
-    #     else:
-    #         logging.error(f"No profiles found in HOLE output for {pdb_id}")
-    #         return
-    # else:
-    #     # If it's not a dictionary, assume it's the expected HOLE object
-    #      H.run()
-    #      H.collect()
-    #     # If it's not a dictionary, assume it's the expected HOLE object
-    #     if hasattr(H, 'results') and len(H.results.profiles) > 0:
-    #         profile = H.results.profiles[0]
-    #         if 'radius' in profile.dtype.names and 'rxn_coord' in profile.dtype.names:
-    #             x = profile['radius']
-    #             y = profile['rxn_coord']
-    #         else:
-    #             logging.error(f"Expected 'radius' and 'rxn_coord' not found in profile for {pdb_id}. Available fields: {profile.dtype.names}")
-    #             return
-    #     else:
-    #         x = list(H.profiles.items())[0][1].radius
-    #         y = list(H.profiles.items())[0][1].rxncoord
-    #         logging.error(f"No profiles found in HOLE output for {pdb_id}")
-    #         return
-
-    H.run()
-    H.collect()
+    # Check if H is a dictionary (which it seems to be based on the error)
+    if isinstance(H, dict):
+        # If it's a dictionary, we need to handle it differently
+        # You might need to adjust this part based on what's actually in the dictionary
+        profiles = H.get('profiles', {})
+        if profiles:
+            profile = list(profiles.values())[0]
+            x = profile.radius
+            y = profile.rxncoord
+        else:
+            logging.error(f"No profiles found in HOLE output for {pdb_id}")
+            return
+    else:
+        # If it's not a dictionary, assume it's the expected HOLE object
+        H.run()
+        H.collect()
+        x = list(H.profiles.items())[0][1].radius
+        y = list(H.profiles.items())[0][1].rxncoord
 
     print(short_filename)
-        # save HOLE profile plot
-    x = list(H.profiles.items())[0][1].radius
-    y = list(H.profiles.items())[0][1].rxncoord
 
     # Save HOLE profile plot
     fig, ax = plt.subplots()

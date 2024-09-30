@@ -1,5 +1,6 @@
 docker run -it --entrypoint /bin/bash trp_channel_alignment_no_cluster_2
 docker build --no-cache -t trp_channel_alignment_no_cluster_2 .
 
-python ./main.py ./paths.txt --logging detailed $2>1|tee output.log
-python ./main.py ./paths.txt --run-hole-analysis $2>1|tee output.log
+python ./main.py ./paths.txt --logging detailed 2>&1|tee output.log
+python ./main.py ./paths.txt --run-hole-analysis 2>&1 | tee output.log
+zip -r aligned_structures_6co7.zip /app/R1/3_aligned_structures/stationary_6co7
