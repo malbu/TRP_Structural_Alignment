@@ -815,7 +815,23 @@ def assign_elements(u):
             atom.element = atom_element_mapping[first_char]
         else:
             # Default or handle unknown elements
-            atom.element = 'C'  # You can choose a different default or implement more logic
+            atom.element = 'C'  
+def add_element_to_pdb(pdb_file_in, pdb_file_out):
+    with open(pdb_file_in, 'r') as fin, open(pdb_file_out, 'w') as fout:
+        for line in fin:
+            if line.startswith(('ATOM', 'HETATM')):
+                atom_name = line[12:16].strip()
+                # Use last two characters for element symbol if atom name is longer
+                if len(atom_name) > 1 and atom_name[:2] in ['FE', 'MG', 'ZN', 'CA', 'NA', 'CL', 'BR', 'LI']:
+                    element = atom_name[:2].upper()
+                else:
+                    element = atom_name[0].upper()
+                if len(element) == 1:
+                    element = ' ' + element
+                new_line = line[:76] + element.rjust(2) + line[78:]
+                fout.write(new_line)
+            else:
+                fout.write(line)
 
 @log_execution_time
 def single_hole(filename, short_filename, pdb_id, out_dir, input_df, vdw_file, pore_point):
@@ -828,22 +844,22 @@ def single_hole(filename, short_filename, pdb_id, out_dir, input_df, vdw_file, p
     print(f'm: {short_filename}, s: {pdb_id}')
 
     try:
-        # Initialize Universe
-        u = Universe(filename)
-        logging.debug(f"Initialized Universe for {filename}")
+        # Preprocess the PDB file to add element symbols
+        modified_filename = os.path.join(out_dir, f"{short_filename}_element.pdb")
+        add_element_to_pdb(filename, modified_filename)
 
-        # Guess elements and masses
-        from MDAnalysis.topology import guessers
-        for atom in u.atoms:
-            if not atom.element:
-                atom.element = guessers.guess_atom_element(atom.name)
-            if atom.mass == 0:
-                atom.mass = guessers.guess_atom_mass(atom.element)
+        # Initialize Universe with the modified PDB
+        u = Universe(modified_filename)
+        logging.debug(f"Initialized Universe for {modified_filename}")
 
+        # Optionally assign masses if needed
+        from MDAnalysis.topology.guessers import guess_masses
+        u.add_TopologyAttr('masses', guess_masses(u.atoms.elements))
+
+        # Proceed with HOLE analysis
         # Use the correct HOLE executable path
         hole_executable = "/miniconda/envs/myenv/bin/hole"
-
-        # Process pore_point
+                # Process pore_point
         if pore_point:
             if isinstance(pore_point, str):
                 pore_point = [float(x) for x in pore_point.strip('[]').split(',')]

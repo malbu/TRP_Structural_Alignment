@@ -774,9 +774,41 @@ def batch_hole(directory_in, category_df, hole_path, ref_struct, vdw_file, pore_
   #n_cpus = mp.cpu_count()
   #pool = mp.Pool(n_cpus)
   #results = [pool.apply(single_hole, args=arg_tup) for arg_tup in arg_list]
+
+def parse_hole_output(hole_output_file):
+    radius_list = []
+    rxncoord_list = []
+    recording = False
+
+    with open(hole_output_file, 'r') as file:
+        for line in file:
+            if line.strip().startswith('cenxyz.cvec'):
+                recording = True
+                continue
+            if recording:
+                if not line.strip() or not line[0].isdigit() and not line[0] == '-':
+                    # Stop recording when the data section ends
+                    break
+                parts = line.strip().split()
+                if len(parts) >= 2:
+                    rxncoord = float(parts[0])
+                    radius = float(parts[1])
+                    rxncoord_list.append(rxncoord)
+                    radius_list.append(radius)
+
+    return radius_list, rxncoord_list
    
 def single_hole(filename, short_filename, pdb_id, out_dir, hole_path, input_df, vdw_file, pore_point):
     pore_point_str = ' '.join(map(str, pore_point))
+    outfile = os.path.join(out_dir, f"{short_filename}_hole_out.txt")
+    sphpdb_file = os.path.join(out_dir, f"{short_filename}_hole.pdb")
+    
+    logging.info(f"Input file: {filename}")
+    logging.info(f"Output file: {outfile}")
+    logging.info(f"SPHPDB file: {sphpdb_file}")
+    logging.info(f"HOLE executable: {hole_path}")
+    logging.info(f"VDW file: {vdw_file}")
+    logging.info(f"Pore point: {pore_point_str}")
     
     H = hole(pdbfile=filename, 
              outfile=out_dir+"/"+short_filename+"_hole_out.txt",
@@ -785,25 +817,42 @@ def single_hole(filename, short_filename, pdb_id, out_dir, hole_path, input_df, 
              ignore_residues=['SOL', 'WAT', 'TIP', 'HOH', 'K  ', 'NA ', 'CL ', 'CA ', 'MG ', 'GD ', 'DUM', 'TRS'], 
              vdwradii_file=vdw_file, 
              executable=hole_path)
-    
-    # Check if H is a dictionary (which it seems to be based on the error)
-    if isinstance(H, dict):
-        # If it's a dictionary, we need to handle it differently
-        # You might need to adjust this part based on what's actually in the dictionary
-        profiles = H.get('profiles', {})
-        if profiles:
-            profile = list(profiles.values())[0]
-            x = profile.radius
-            y = profile.rxncoord
-        else:
-            logging.error(f"No profiles found in HOLE output for {pdb_id}")
-            return
+
+    #H.filename = H.utils.check_and_fix_long_filename(H.filename) 
+    #H.logfile = H.utils.check_and_fix_long_filename(H.logfile)
+    #H.sphpdb = H.utils.check_and_fix_long_filename(H.sphpdb)
+    #H.radius = H.utils.check_and_fix_long_filename(H.radius)
+    #H.exe = H.utils.check_and_fix_long_filename(H.exe)
+    #H.run()
+    #H.collect()
+        # Manually parse the HOLE output file
+    radius_list, rxncoord_list = parse_hole_output(outfile)
+
+    if radius_list and rxncoord_list:
+        x = radius_list
+        y = rxncoord_list
     else:
-        # If it's not a dictionary, assume it's the expected HOLE object
-        H.run()
-        H.collect()
-        x = list(H.profiles.items())[0][1].radius
-        y = list(H.profiles.items())[0][1].rxncoord
+        logging.error(f"No profile data found for {pdb_id}")
+        return
+    
+    # # Check if H is a dictionary (which it seems to be based on the error)
+    # if isinstance(H, dict):
+    #     # If it's a dictionary, we need to handle it differently
+    #     # You might need to adjust this part based on what's actually in the dictionary
+    #     profiles = H.get('profiles', {})
+    #     if profiles:
+    #         profile = list(profiles.values())[0]
+    #         x = profile.radius
+    #         y = profile.rxncoord
+    #     else:
+    #         logging.error(f"No profiles found in HOLE output for {pdb_id}")
+    #         return
+    # else:
+    #     H.run()
+    #     H.collect()
+    #     # If it's not a dictionary, assume it's the expected HOLE object
+    #     x = list(H.profiles.items())[0][1].radius
+    #     y = list(H.profiles.items())[0][1].rxncoord
 
     print(short_filename)
 
