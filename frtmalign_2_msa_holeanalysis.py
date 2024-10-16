@@ -316,6 +316,9 @@ def strip_tm_chains(wkdir,inputf,pdb_path,chains_data):
     f.close()
     o.close()
     return resid_count
+
+def error_callback(error):
+    logging.error(f"An error occurred during alignment: {error}")
     
 @log_execution_time
 def batch_frtmalign(in_file_path, out_dir, frtmalign_path, original_dir, clean_dir):
@@ -323,29 +326,40 @@ def batch_frtmalign(in_file_path, out_dir, frtmalign_path, original_dir, clean_d
     arg_list = []
     total_alignments = 0
     start_time = time.time()
+
+    def error_callback(error):
+        logging.error(f"An error occurred during alignment: {error}")
+
     with tempfile.TemporaryDirectory() as tmpdirname:
         logging.info(f"Created temporary directory: {tmpdirname}")
-        tmpdirnamefull = tmpdirname+"/"
+        tmpdirnamefull = tmpdirname + "/"
+        
+        # Copy PDB files to temporary directory
         for pdb_file in glob.glob(in_file_path + "*pdb"):
             file_name = os.path.split(pdb_file)
-            shutil.copy2(pdb_file, tmpdirnamefull+file_name[1])
+            shutil.copy2(pdb_file, tmpdirnamefull + file_name[1])
+        
+        # Prepare arguments for alignments
         for station_file in glob.glob(tmpdirnamefull + "*.pdb"):
             station_name = station_file[-14:-10]
-            out_file_path = "%sstationary_%s/" %(tmpdirnamefull, station_name)
+            out_file_path = f"{tmpdirnamefull}stationary_{station_name}/"
             outfilename = out_file_path + station_name + ".pdb"
             os.makedirs(os.path.dirname(outfilename), exist_ok=True)
             for mobile_file in glob.glob(tmpdirnamefull + "*.pdb"):
                 mobile_name = mobile_file[-14:-10]
                 arg_list.append((mobile_file, station_file, out_file_path, mobile_name, station_name, frtmalign_path, original_dir, clean_dir))
                 total_alignments += 1
-        
+
         timing_logger.info(f"Total alignments to be performed: {total_alignments}")
-        
+
+        # Perform alignments using multiprocessing
         n_cpus = mp.cpu_count()
         timing_logger.info(f"Using {n_cpus} CPUs for parallel processing")
-        pool = mp.Pool(n_cpus)
-        results = [pool.apply(single_frtmalign, args=arg_tup) for arg_tup in arg_list]
-        
+        with mp.Pool(n_cpus) as pool:
+            results = pool.starmap_async(single_frtmalign, arg_list, error_callback=error_callback)
+            results.wait()
+
+        # Copy results to output directory
         for root, dirs, files in os.walk(tmpdirname, topdown=False):
             dir_name = os.path.split(root)[1]
             if dir_name.startswith('stationary'):
@@ -357,9 +371,11 @@ def batch_frtmalign(in_file_path, out_dir, frtmalign_path, original_dir, clean_d
                     pass
                 for item in files:
                     shutil.copy2(os.path.join(root, item), os.path.join(out_dir, dir_name, item))
+        
+        # Copy temporary directory for inspection
         shutil.copytree(tmpdirname, out_dir + "/temp_frtmalign", dirs_exist_ok=True)
         logging.info(f"Copied temporary directory to {out_dir}/temp_frtmalign for inspection")
-    
+
     end_time = time.time()
     total_time = end_time - start_time
     timing_logger.info(f"Batch Fr-TM-Align completed. Total time: {total_time:.2f} seconds")
