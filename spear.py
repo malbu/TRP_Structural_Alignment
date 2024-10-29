@@ -1,8 +1,7 @@
 """
 SPEAR: Structural Pore Efficient Analysis and Representation
-A modular pipeline for analyzing and comparing pore structures.
 
-BioDavinci
+
 """
 
 import os
@@ -58,13 +57,13 @@ DEFAULT_CONFIG = {
     },
     'analysis': {
         'min_pore_radius': 1.0,
-        'na_permissive_threshold': 3.6,
-        'ca_permissive_threshold': 4.1
+        'na_permissive_threshold': 3, #This is a guess; need to tune this based on experiments
+        'ca_permissive_threshold': 4 #This is a guess; need to tune this based on experiments
     },
     'validation': {
         'min_structures': 3,
-        'max_outlier_percentage': 10,
-        'quality_threshold': 0.7
+        'max_outlier_percentage': 10, #This is a guess; need to tune this based on experiments
+        'quality_threshold': 0.9 #This is a guess; need to tune this based on experiments
     }
 }
 
@@ -170,7 +169,7 @@ class SPEARAnalysis:
         logger.info("SPEAR analysis pipeline completed")
         return results
 
-def _analyze_pore_profiles(self, directory: str) -> Dict[str, PoreProfile]:
+    def _analyze_pore_profiles(self, directory: str) -> Dict[str, PoreProfile]:
         """Analyze all pore profiles in directory"""
         profiles = {}
         radius_files = glob.glob(os.path.join(directory, '*/*_radius.csv'))
@@ -189,7 +188,7 @@ def _analyze_pore_profiles(self, directory: str) -> Dict[str, PoreProfile]:
         return profiles
         
     def _validate_data(self):
-        """Validate data quality and completeness"""
+        """Helper function debugging: validate data completeness"""
         logger.info("Validating data quality")
         
         # Check minimum number of structures
@@ -292,7 +291,7 @@ def _analyze_pore_profiles(self, directory: str) -> Dict[str, PoreProfile]:
             cluster_pdbs = self.clusters[self.clusters['Cluster'] == cluster]['PDB_ID'].tolist()
             alignment_groups['within_cluster'].extend(list(itertools.combinations(cluster_pdbs, 2)))
             
-        # Select and align cluster representatives
+        # Select/align cluster representatives
         representatives = self._select_cluster_representatives()
         alignment_groups['between_cluster_representatives'].extend(
             list(itertools.combinations(representatives, 2)))
@@ -412,7 +411,7 @@ def _generate_interactive_visualizations(self) -> Dict[str, go.Figure]:
         dashboard.save(os.path.join(output_dir, 'spear_report.html'))
         
     def generate_analysis_summary(self, output_dir: str):
-        """Generate analysis summary files"""
+        """This is not a high priority for now but this would generate analysis summary files"""
         logger.info("Generating analysis summary")
         
         # Save cluster results
@@ -494,7 +493,7 @@ def run_spear_pipeline(clean_dir: str, frtmalign_dir: str, frtmalign_path: str,
     spear = SPEARAnalysis(spear_config)
     
     try:
-        # Run initial HOLE analysis
+        # Run HOLE analysis
         logger.info("Running initial HOLE analysis")
         initial_profiles = {}
         for pdb_file in glob.glob(os.path.join(clean_dir, "*_clean.pdb")):
@@ -508,6 +507,7 @@ def run_spear_pipeline(clean_dir: str, frtmalign_dir: str, frtmalign_path: str,
         results = spear.run_analysis(output_dir, category_df)
         
         # Perform strategic alignments
+        # TODO look at parallelizing this
         logger.info("Performing strategic alignments")
         for group_type, alignments in spear.alignment_groups.items():
             group_dir = os.path.join(output_dir, f"alignments_{group_type}")

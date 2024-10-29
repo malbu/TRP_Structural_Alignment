@@ -1054,6 +1054,50 @@ def single_hole(filename, short_filename, pdb_id, out_dir, input_df, vdw_file, p
         tm_aa_level_radius_df.to_csv(os.path.join(out_dir, f"{short_filename}_radius.csv"), index=False)
         logging.info(f"Residue-level radius data saved for {pdb_id}")
 
+        # After HOLE analysis completes, copy and parse the output files
+        hole_out_file = "/app/R1/hole000.out"
+        hole_out_dest = os.path.join(out_dir, f"{short_filename}_hole.out")
+        
+        if os.path.exists(hole_out_file):
+            # Copy the HOLE output file
+            shutil.copy2(hole_out_file, hole_out_dest)
+            logging.info(f"Copied HOLE output file to {hole_out_dest}")
+
+            # Parse the HOLE output file for radius data
+            radius_data = []
+            with open(hole_out_dest, 'r') as f:
+                reading_coords = False
+                for line in f:
+                    if "cenxyz.cvec      radius" in line:
+                        reading_coords = True
+                        continue
+                    if reading_coords and line.strip():
+                        try:
+                            # Split on whitespace and get all columns
+                            parts = line.split()
+                            if len(parts) >= 4 and not line.startswith(' Explanation'):
+                                cenxyz_cvec = float(parts[0])
+                                radius = float(parts[1])
+                                cen_line_D = float(parts[2])
+                                sum_area = float(parts[3])
+                                point_type = parts[4] if len(parts) > 4 else ""  # (sampled) or (mid-point)
+                                radius_data.append([cenxyz_cvec, radius, cen_line_D, sum_area, point_type])
+                        except (ValueError, IndexError) as e:
+                            if not any(x in line for x in ["distance to", "end of", "cenxyz.cvec"]):
+                                logging.warning(f"Could not parse line in HOLE output: {line.strip()}")
+
+            # Save radius data to CSV
+            if radius_data:
+                radius_df = pd.DataFrame(
+                    radius_data, 
+                    columns=['cenxyz_cvec', 'radius', 'cen_line_D', 'sum_area', 'point_type']
+                )
+                radius_csv_path = os.path.join(out_dir, f"{short_filename}_radius.csv")
+                radius_df.to_csv(radius_csv_path, index=False)
+                logging.info(f"Saved parsed radius data to {radius_csv_path}")
+            else:
+                logging.warning(f"No radius data found in HOLE output for {short_filename}")
+
     except Exception as e:
         logging.error(f"Error during residue-level analysis for {pdb_id}: {e}")
         raise

@@ -40,7 +40,10 @@ RUN conda install -c conda-forge -y \
     MDAnalysis \
     mdanalysis \
     requests \
-    hole2
+    hole2 \
+    plotly \
+    panel \
+    scikit-learn
 
 # Install mdahole2 from GitHub
 RUN pip install git+https://github.com/MDAnalysis/mdahole2.git
@@ -90,6 +93,7 @@ RUN unzip /tmp/frtmalign.zip -d /home/software/frtmalign \
 # Copy necessary files with shorter paths
 COPY struct_info191031.xml simple2.rad /app/R1/
 COPY paths.txt main.py frtmalign_2_msa.py frtmalign_2_msa_additional_logging.py frtmalign_2_msa_holeanalysis.py /app/
+COPY spear.py /app/
 
 # Create a verification script
 RUN echo '#!/bin/bash' > /app/verify_paths.sh && \
