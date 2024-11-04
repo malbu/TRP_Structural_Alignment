@@ -954,105 +954,171 @@ def single_hole(filename, short_filename, pdb_id, out_dir, input_df, vdw_file, p
         else:
             logging.warning(f"No profiles found for {short_filename}. Skipping plot generation.")
 
-        # Residue-level analysis
-        if len(input_df.loc[pdb_id, 'TM chains']) != 4:
-            logging.info(f"{pdb_id} does not have four chains, skipping residue-level analysis.")
-            return
+        # Initialize DataFrames for both types of data
+        hole_data = []
+        residue_data = []
 
-        chain_info = input_df.loc[pdb_id, 'TM chains']
-        chain_ids = [chain[0] for chain in chain_info]
-        residue_ranges = [chain[1] for chain in chain_info]
+        # Parse HOLE output
+        hole_out_file = "/app/R1/hole000.out"
+        hole_out_dest = os.path.join(out_dir, f"{short_filename}_hole.out")
+        
+        if os.path.exists(hole_out_file):
+            # Copy the HOLE output file
+            shutil.copy2(hole_out_file, hole_out_dest)
+            logging.info(f"Copied HOLE output file to {hole_out_dest}")
 
-        if not all(r == residue_ranges[0] for r in residue_ranges):
-            logging.info(f"{pdb_id} does not have the same residue range for all chains, skipping residue-level analysis.")
-            return
+            # Parse the HOLE output file for radius data
+            with open(hole_out_dest, 'r') as f:
+                reading_coords = False
+                for line in f:
+                    if "cenxyz.cvec      radius" in line:
+                        reading_coords = True
+                        continue
+                    if reading_coords and line.strip():
+                        try:
+                            parts = line.split()
+                            if len(parts) >= 4 and not line.startswith(' Explanation'):
+                                cenxyz_cvec = float(parts[0])
+                                radius = float(parts[1])
+                                cen_line_D = float(parts[2])
+                                sum_area = float(parts[3])
+                                point_type = parts[4] if len(parts) > 4 else ""
+                                hole_data.append([cenxyz_cvec, radius, cen_line_D, sum_area, point_type])
+                        except (ValueError, IndexError) as e:
+                            if not any(x in line for x in ["distance to", "end of", "cenxyz.cvec"]):
+                                logging.warning(f"Could not parse line in HOLE output: {line.strip()}")
 
-        # Parse original PDB structure
-        pdb_parser = PDBParser(QUIET=True)
-        structure = pdb_parser.get_structure(pdb_id, filename)
+        # Process residue-level analysis
+        if len(input_df.loc[pdb_id, 'TM chains']) == 4:
+            chain_info = input_df.loc[pdb_id, 'TM chains']
+            chain_ids = [chain[0] for chain in chain_info]
+            residue_ranges = [chain[1] for chain in chain_info]
 
-        # Parse HOLE output SPH file
-        hole_sph_list = []
-        with open(sphpdb_file, 'r') as sph_file:
-            for line in sph_file:
-                if line.startswith('ATOM'):
-                    x = float(line[30:38])
-                    y = float(line[38:46])
-                    z = float(line[46:54])
-                    radius = float(line[54:60])
-                    hole_sph_list.append([x, y, z, radius])
-        hole_sph_df = pd.DataFrame(hole_sph_list, columns=['x', 'y', 'z', 'radius'])
+            if all(r == residue_ranges[0] for r in residue_ranges):
+                # Parse original PDB structure
+                pdb_parser = PDBParser(QUIET=True)
+                structure = pdb_parser.get_structure(pdb_id, filename)
 
-        residue_level_radius = {}
-        for residue in structure[0][chain_ids[0]]:
-            # Fetch corresponding residues from other chains
-            try:
-                residues_other = [structure[0][chain][residue.get_id()[1]] for chain in chain_ids[1:]]
-            except KeyError:
-                # Missing residues in other chains
-                residue_level_radius[residue.get_full_id()] = [residue.get_resname(), 'NaN']
-                continue
+                # Parse HOLE output SPH file
+                hole_sph_list = []
+                with open(sphpdb_file, 'r') as sph_file:
+                    for line in sph_file:
+                        if line.startswith('ATOM'):
+                            x = float(line[30:38])
+                            y = float(line[38:46])
+                            z = float(line[46:54])
+                            radius = float(line[54:60])
+                            hole_sph_list.append([x, y, z, radius])
+                hole_sph_df = pd.DataFrame(hole_sph_list, columns=['x', 'y', 'z', 'radius'])
 
-            # Check if residues have the same name
-            if not all(residue.get_resname() == res.get_resname() for res in residues_other):
-                residue_level_radius[residue.get_full_id()] = [residue.get_resname(), 'NaN']
-                continue
+                residue_level_radius = {}
+                for residue in structure[0][chain_ids[0]]:
+                    # Fetch corresponding residues from other chains
+                    try:
+                        residues_other = [structure[0][chain][residue.get_id()[1]] for chain in chain_ids[1:]]
+                    except KeyError:
+                        # Missing residues in other chains
+                        residue_level_radius[residue.get_full_id()] = [residue.get_resname(), 'NaN']
+                        continue
 
-            # Gather atom coordinates from all chains
-            atom_dict = {}
-            for atom in residue:
-                atom_name = atom.get_name()
-                coords = [atom.get_coord()]
-                for res in residues_other:
-                    if atom_name in res:
-                        coords.append(res[atom_name].get_coord())
-                    else:
-                        coords.append(None)  # Missing atom
-                # Filter out None values
-                coords = [coord for coord in coords if coord is not None]
-                if len(coords) != len(chain_ids):
-                    continue  # Incomplete atom data
+                    # Check if residues have the same name
+                    if not all(residue.get_resname() == res.get_resname() for res in residues_other):
+                        residue_level_radius[residue.get_full_id()] = [residue.get_resname(), 'NaN']
+                        continue
 
-                # Calculate average coordinates
-                avg_coord = np.mean(coords, axis=0)
+                    # Gather atom coordinates from all chains
+                    atom_dict = {}
+                    for atom in residue:
+                        atom_name = atom.get_name()
+                        coords = [atom.get_coord()]
+                        for res in residues_other:
+                            if atom_name in res:
+                                coords.append(res[atom_name].get_coord())
+                            else:
+                                coords.append(None)  # Missing atom
+                        # Filter out None values
+                        coords = [coord for coord in coords if coord is not None]
+                        if len(coords) != len(chain_ids):
+                            continue  # Incomplete atom data
 
-                # Find the closest sphere in HOLE output based on z-coordinate
-                closest_idx = (np.abs(hole_sph_df['z'] - avg_coord[2])).idxmin()
-                closest_radius = hole_sph_df.loc[closest_idx, 'radius']
+                        # Calculate average coordinates
+                        avg_coord = np.mean(coords, axis=0)
 
-                # Adjust for van der Waals radius
-                vdwr = from_name_to_vdwr(atom_name)
-                radius_distance = (closest_radius / 2) - vdwr
+                        # Find the closest sphere in HOLE output based on z-coordinate
+                        closest_idx = (np.abs(hole_sph_df['z'] - avg_coord[2])).idxmin()
+                        closest_radius = hole_sph_df.loc[closest_idx, 'radius']
 
-                if radius_distance >= 0:
-                    atom_dict[atom_name] = (avg_coord[0], avg_coord[1], avg_coord[2], radius_distance)
+                        # Adjust for van der Waals radius
+                        vdwr = from_name_to_vdwr(atom_name)
+                        radius_distance = (closest_radius / 2) - vdwr
 
-            if not atom_dict:
-                residue_level_radius[residue.get_full_id()] = [residue.get_resname(), 'NaN']
-                continue
+                        if radius_distance >= 0:
+                            atom_dict[atom_name] = (avg_coord[0], avg_coord[1], avg_coord[2], radius_distance)
 
-            # Determine the minimal radius_distance among contributing atoms
-            min_radius = min([tup[3] for tup in atom_dict.values()])
+                    if not atom_dict:
+                        residue_data.append([
+                            residue.get_id()[1],  # residue number
+                            residue.get_resname(),  # residue name
+                            'NaN'  # radius
+                        ])
+                        continue
 
-            residue_level_radius[residue.get_full_id()] = [residue.get_resname(), min_radius]
+                    min_radius = min([tup[3] for tup in atom_dict.values()])
+                    residue_data.append([
+                        residue.get_id()[1],  # residue number
+                        residue.get_resname(),  # residue name
+                        min_radius  # radius
+                    ])
 
-        # Create DataFrame from residue-level radius data
-        residue_level_radius_df = pd.DataFrame.from_dict(residue_level_radius, orient='index', columns=['residue', 'radius'])
+                # Create DataFrame from residue-level radius data
+                residue_level_radius_df = pd.DataFrame.from_dict(residue_level_radius, orient='index', columns=['residue', 'radius'])
 
-        # Filter for standard amino acids
-        amino_acid_list = ['ALA','ARG','ASN','ASP','CYS','GLU','GLN','GLY','HIS','ILE','LEU','LYS','MET','PHE','PRO','SER','THR','TRP','TYR','VAL','MSE']
-        aa_level_radius_df = residue_level_radius_df[residue_level_radius_df['residue'].isin(amino_acid_list)].copy()
+                # Filter for standard amino acids
+                amino_acid_list = ['ALA','ARG','ASN','ASP','CYS','GLU','GLN','GLY','HIS','ILE','LEU','LYS','MET','PHE','PRO','SER','THR','TRP','TYR','VAL','MSE']
+                aa_level_radius_df = residue_level_radius_df[residue_level_radius_df['residue'].isin(amino_acid_list)].copy()
 
-        # Map three-letter codes to one-letter codes
-        aa_level_radius_df['res'] = aa_level_radius_df['residue'].apply(from3to1_general)
-        aa_level_radius_df['res_num'] = aa_level_radius_df.index.map(lambda x: x[3][1])
+                # Map three-letter codes to one-letter codes
+                aa_level_radius_df['res'] = aa_level_radius_df['residue'].apply(from3to1_general)
+                aa_level_radius_df['res_num'] = aa_level_radius_df.index.map(lambda x: x[3][1])
 
-        # Filter for transmembrane region residues
-        tm_aa_level_radius_df = aa_level_radius_df[aa_level_radius_df['res_num'].isin(list(itertools.chain.from_iterable(residue_ranges)))].copy()
+                # Filter for transmembrane region residues
+                tm_aa_level_radius_df = aa_level_radius_df[aa_level_radius_df['res_num'].isin(list(itertools.chain.from_iterable(residue_ranges)))].copy()
 
-        # Save the radius data
-        tm_aa_level_radius_df.to_csv(os.path.join(out_dir, f"{short_filename}_radius.csv"), index=False)
-        logging.info(f"Residue-level radius data saved for {pdb_id}")
+                # Save the radius data
+                tm_aa_level_radius_df.to_csv(os.path.join(out_dir, f"{short_filename}_radius.csv"), index=False)
+                logging.info(f"Residue-level radius data saved for {pdb_id}")
+
+                # Create and save combined DataFrame
+                radius_csv_path = os.path.join(out_dir, f"{short_filename}_radius.csv")
+                
+                # Create DataFrames for both types of data
+                if hole_data:
+                    hole_df = pd.DataFrame(
+                        hole_data,
+                        columns=['cenxyz_cvec', 'radius', 'cen_line_D', 'sum_area', 'point_type']
+                    )
+                    hole_df.to_csv(radius_csv_path, index=False)
+                    logging.info(f"Saved HOLE data to {radius_csv_path}")
+
+                if residue_data:
+                    residue_df = pd.DataFrame(
+                        residue_data,
+                        columns=['res', 'residue', 'radius']
+                    )
+                    # Filter for standard amino acids if needed
+                    amino_acid_list = ['ALA','ARG','ASN','ASP','CYS','GLU','GLN','GLY','HIS','ILE','LEU','LYS','MET','PHE','PRO','SER','THR','TRP','TYR','VAL','MSE']
+                    residue_df = residue_df[residue_df['residue'].isin(amino_acid_list)].copy()
+                    
+                    # Add one-letter codes
+                    residue_df['res_1'] = residue_df['residue'].apply(from3to1_general)
+                    
+                    # Save to separate file or append to existing
+                    residue_csv_path = os.path.join(out_dir, f"{short_filename}_residue_radius.csv")
+                    residue_df.to_csv(residue_csv_path, index=False)
+                    logging.info(f"Saved residue-level data to {residue_csv_path}")
+
+                if not (hole_data or residue_data):
+                    logging.warning(f"No radius data found for {short_filename}")
 
         # After HOLE analysis completes, copy and parse the output files
         hole_out_file = "/app/R1/hole000.out"
@@ -1199,17 +1265,25 @@ def hole_annotation(msa_filename, radius_directory, norm_max_radius):
 
 def read_one_radius_file(radius_filename):
     pdb_id = os.path.basename(radius_filename).split('_')[0]
+    
+    # Try to read residue radius file first
+    residue_filename = radius_filename.replace('_radius.csv', '_residue_radius.csv')
+    if os.path.exists(residue_filename):
+        radius_df = pd.read_csv(residue_filename)
+        if all(col in radius_df.columns for col in ['res', 'residue', 'radius']):
+            radius_col = radius_df['radius'].tolist()
+            max_radius = radius_df['radius'].max()
+            sequence = ''.join(radius_df['res_1'].tolist())
+            return pdb_id, radius_col, max_radius, sequence
+    
+    # Fall back to HOLE output file if needed
     radius_df = pd.read_csv(radius_filename)
-
-    if 'res' not in radius_df.columns or 'radius' not in radius_df.columns:
-        logging.error(f"Radius file {radius_filename} missing required columns.")
-        raise ValueError(f"Radius file {radius_filename} missing required columns.")
-
-    max_radius = radius_df['radius'].dropna().max()
-    sequence = ''.join(radius_df['res'].astype(str).tolist())
-
-    return pdb_id, radius_df['radius'].tolist(), max_radius, sequence
-
+    if 'radius' in radius_df.columns:
+        radius_col = radius_df['radius'].tolist()
+        max_radius = radius_df['radius'].max()
+        return pdb_id, radius_col, max_radius, None
+    
+    raise ValueError(f"Radius file {radius_filename} missing required columns.")
 
 def read_msa_file(msa_filename):
   template_name = msa_filename[-13:-9]
