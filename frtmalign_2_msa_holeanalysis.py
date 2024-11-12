@@ -33,6 +33,7 @@ from functools import wraps
 #import MDAnalysis.analysis.hole2
 #print(dir(MDAnalysis.analysis.hole2))
 from scipy.cluster.hierarchy import dendrogram, linkage, leaves_list
+
 try:
   from pyali.mrgali import *
 except:
@@ -1489,7 +1490,7 @@ def ident_sim_calc(input_directory, parent_pdbid):
     [-1.0, 0.0, 0.0, 1.0, -3.0, 3.0, 4.0, -2.0, 0.0, -3.0, -3.0, 1.0, -1.0, -3.0, -1.0, 0.0, -1.0, -3.0, -2.0, -2.0, 1.0, 4.0, -1.0, -4.0, 0.0], 
     [0.0, -1.0, -1.0, -1.0, -2.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -2.0, 0.0, 0.0, -2.0, -1.0, -1.0, -1.0, -1.0, -1.0, -4.0, 0.0], 
     [-4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, -4.0, 1.0, 0.0], 
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]
   blosum62_labels = ['A', 'R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V', 'B', 'Z', 'X', '*', '-']
   blosum62 = pd.DataFrame(blosum62_list, columns=blosum62_labels, index=blosum62_labels)
 
@@ -1547,3 +1548,5 @@ def make_heatmap(data, output_filename, colormap, plot_type):
 
 def positive_match(char1, char2, matrix):
   return(matrix.loc[char1, char2] > 0) # similarity match defined as one with positive value in BLOSUM62 matrix
+
+

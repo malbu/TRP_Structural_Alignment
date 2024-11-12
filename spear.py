@@ -31,8 +31,12 @@ import MDAnalysis as mda
 from MDAnalysis.analysis import hole2
 import panel as pn
 
-# Import base functionality from frtmalign_2_msa_holeanalysis
-from frtmalign_2_msa_holeanalysis import *
+# Import base functionality - remove the circular import
+from frtmalign_2_msa_holeanalysis import (
+    batch_hole,
+    hole_annotation,
+    single_frtmalign  
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 
@@ -327,7 +331,7 @@ class SPEARAnalysis:
             
         return representatives
 
-def _generate_interactive_visualizations(self) -> Dict[str, go.Figure]:
+    def _generate_interactive_visualizations(self) -> Dict[str, go.Figure]:
         """Generate interactive Plotly visualizations"""
         logger.info("Generating interactive visualizations")
         
@@ -471,7 +475,7 @@ def _generate_interactive_visualizations(self) -> Dict[str, go.Figure]:
         return "\n".join(summary)
 
 
-@log_execution_time
+#@log_execution_time
 def run_spear_pipeline(clean_dir: str, frtmalign_dir: str, frtmalign_path: str,
                       original_dir: str, clean_dir_path: str, category_df: pd.DataFrame,
                       vdw_file: str, pore_point: Union[str, List[float]],
@@ -495,13 +499,21 @@ def run_spear_pipeline(clean_dir: str, frtmalign_dir: str, frtmalign_path: str,
     try:
         # Run HOLE analysis
         logger.info("Running initial HOLE analysis")
-        initial_profiles = {}
         for pdb_file in glob.glob(os.path.join(clean_dir, "*_clean.pdb")):
             pdb_id = os.path.basename(pdb_file)[:4]
             out_dir = os.path.join(output_dir, f"hole_analysis_{pdb_id}")
             os.makedirs(out_dir, exist_ok=True)
             
-            single_hole(pdb_file, pdb_id, pdb_id, out_dir, category_df, vdw_file, pore_point)
+            # Use the imported single_hole function
+            single_hole(
+                filename=pdb_file,
+                short_filename=pdb_id,
+                pdb_id=pdb_id,
+                out_dir=out_dir,
+                input_df=category_df,
+                vdw_file=vdw_file,
+                pore_point=pore_point
+            )
             
         # Run SPEAR analysis
         results = spear.run_analysis(output_dir, category_df)
