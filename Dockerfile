@@ -83,8 +83,12 @@ ENV PATH="/miniconda/envs/myenv/bin:$PATH"
 RUN mkdir -p /opt/p2rank \
     && wget https://github.com/rdk/p2rank/releases/download/2.5/p2rank_2.5.tar.gz -O /tmp/p2rank.tar.gz \
     && tar -xzf /tmp/p2rank.tar.gz -C /opt/p2rank --strip-components=1 \
-    && rm /tmp/p2rank.tar.gz \
-    && ln -s /opt/p2rank/prank /usr/local/bin/prank
+    && rm /tmp/p2rank.tar.gz
+
+# Create a wrapper script for prank
+RUN echo '#!/bin/bash' > /usr/local/bin/prank && \
+    echo 'cd /opt/p2rank && ./prank "$@"' >> /usr/local/bin/prank && \
+    chmod +x /usr/local/bin/prank
 
 # Fr-TM-Align setup with shorter paths
 RUN mkdir -p /app/R1 /app/P_structs /home/software/frtmalign
@@ -132,11 +136,8 @@ RUN echo '#!/bin/bash' > /app/verify_paths.sh && \
     echo 'else' >> /app/verify_paths.sh && \
     echo '    echo "HOLE is not found in PATH"' >> /app/verify_paths.sh && \
     echo 'fi' >> /app/verify_paths.sh && \
-    echo 'if command -v prank &> /dev/null; then' >> /app/verify_paths.sh && \
-    echo '    echo "P2Rank is installed and in PATH"' >> /app/verify_paths.sh && \
-    echo 'else' >> /app/verify_paths.sh && \
-    echo '    echo "P2Rank is not found in PATH"' >> /app/verify_paths.sh && \
-    echo 'fi' >> /app/verify_paths.sh && \
+    echo 'echo -n "P2Rank version: "' >> /app/verify_paths.sh && \
+    echo 'cd /opt/p2rank && ./prank -v || echo "P2Rank not working properly"' >> /app/verify_paths.sh && \
     echo 'echo "Verification complete."' >> /app/verify_paths.sh && \
     chmod +x /app/verify_paths.sh
 
