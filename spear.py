@@ -35,7 +35,11 @@ import panel as pn
 from frtmalign_2_msa_holeanalysis import (
     batch_hole,
     hole_annotation,
-    single_frtmalign  
+    single_frtmalign,
+    get_struct,
+    strip_tm_chains, 
+    paths_dic,
+    single_hole
 )
 
 # Configure logging
@@ -479,16 +483,14 @@ class SPEARAnalysis:
 def run_spear_pipeline(clean_dir: str, frtmalign_dir: str, frtmalign_path: str,
                       original_dir: str, clean_dir_path: str, category_df: pd.DataFrame,
                       vdw_file: str, pore_point: Union[str, List[float]],
+                      paths: Dict,
                       config: Optional[Dict] = None):
     """
     Main entry point for SPEAR pipeline
     """
     # Initialize configuration
-    if config is not None:
-        spear_config = SPEARConfig.from_dict(config)
-    else:
-        spear_config = SPEARConfig.from_dict(DEFAULT_CONFIG)
-        
+    spear_config = SPEARConfig.from_dict(config if config else DEFAULT_CONFIG)
+    
     # Create output directory structure
     output_dir = os.path.join(frtmalign_dir, 'spear_analysis')
     os.makedirs(output_dir, exist_ok=True)
@@ -497,25 +499,49 @@ def run_spear_pipeline(clean_dir: str, frtmalign_dir: str, frtmalign_path: str,
     spear = SPEARAnalysis(spear_config)
     
     try:
-        # Run HOLE analysis
+        # First run the standard preprocessing steps
+        logger.info("Running preprocessing steps")
+        
+        # Convert DataFrame index to strings if they aren't already
+        category_df.index = category_df.index.astype(str)
+        struct_info_dic = category_df.to_dict('index')
+        
+        for pdb_id, value in struct_info_dic.items():
+            success = get_struct(pdb_id, original_dir, paths['provided_struct'])
+            if success:
+                strip_tm_chains(clean_dir, pdb_id, 
+                              os.path.join(original_dir, f"{pdb_id}.pdb"), 
+                              value['tm_chains'])
+        
+        # Now run HOLE analysis
         logger.info("Running initial HOLE analysis")
+        hole_results = []
+        
         for pdb_file in glob.glob(os.path.join(clean_dir, "*_clean.pdb")):
             pdb_id = os.path.basename(pdb_file)[:4]
-            out_dir = os.path.join(output_dir, f"hole_analysis_{pdb_id}")
-            os.makedirs(out_dir, exist_ok=True)
+            hole_out_dir = os.path.join(output_dir, f"hole_analysis_{pdb_id}")
+            os.makedirs(hole_out_dir, exist_ok=True)
             
-            # Use the imported single_hole function
-            single_hole(
+            # Run HOLE analysis and collect results
+            result = single_hole(
                 filename=pdb_file,
                 short_filename=pdb_id,
                 pdb_id=pdb_id,
-                out_dir=out_dir,
+                out_dir=hole_out_dir,
                 input_df=category_df,
                 vdw_file=vdw_file,
                 pore_point=pore_point
             )
+            hole_results.append(result)
             
-        # Run SPEAR analysis
+        # Verify HOLE analysis completed successfully
+        logger.info("Verifying HOLE analysis results")
+        radius_files = glob.glob(os.path.join(output_dir, "hole_analysis_*/*_radius.csv"))
+        if not radius_files:
+            raise RuntimeError("HOLE analysis did not generate expected radius files")
+            
+        # Now run SPEAR analysis
+        logger.info("Running SPEAR analysis")
         results = spear.run_analysis(output_dir, category_df)
         
         # Perform strategic alignments

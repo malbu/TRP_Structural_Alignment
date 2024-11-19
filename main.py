@@ -58,7 +58,16 @@ if use_spear:
     paths = paths_dic(paths_file)
     struct_info_dic, struct_info_df = xml_parser(paths['structs_info'])
     
-    # Import SPEAR functionality
+    # Do preprocessing steps first (same as non-SPEAR path)
+    print('Info: Acquiring and preprocessing structures.')
+    for pdb_id, value in struct_info_dic.items():
+        success = get_struct(pdb_id, paths['pdb_dir'], paths['provided_struct'])
+        if success:
+            num = strip_tm_chains(paths['clean_dir'], pdb_id, 
+                                paths['pdb_dir'] + pdb_id + '.pdb', 
+                                struct_info_dic[pdb_id]['tm_chains'])
+    
+    # Now run SPEAR analysis
     try:
         from spear import run_spear_pipeline
         
@@ -70,7 +79,9 @@ if use_spear:
             clean_dir_path=paths['clean_dir'],
             category_df=struct_info_df,
             vdw_file=paths['vdw_radius_file'],
-            pore_point=paths['hole_reference_pore_point']
+            pore_point=paths['hole_reference_pore_point'],
+            paths=paths,
+            config=None
         )
         print('Info: SPEAR analysis completed successfully')
     except Exception as e:
