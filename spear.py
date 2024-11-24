@@ -500,7 +500,7 @@ def run_spear_pipeline(clean_dir: str, frtmalign_dir: str, frtmalign_path: str,
     
     try:
         # First run the standard preprocessing steps
-        logger.info("Running preprocessing steps")
+        logging.info("Running preprocessing steps")
         
         # Convert DataFrame index to strings if they aren't already
         category_df.index = category_df.index.astype(str)
@@ -514,7 +514,7 @@ def run_spear_pipeline(clean_dir: str, frtmalign_dir: str, frtmalign_path: str,
                               value['tm_chains'])
         
         # Now run HOLE analysis
-        logger.info("Running initial HOLE analysis")
+        logging.info("Running initial HOLE analysis")
         hole_results = []
         
         for pdb_file in glob.glob(os.path.join(clean_dir, "*_clean.pdb")):
@@ -535,18 +535,18 @@ def run_spear_pipeline(clean_dir: str, frtmalign_dir: str, frtmalign_path: str,
             hole_results.append(result)
             
         # Verify HOLE analysis completed successfully
-        logger.info("Verifying HOLE analysis results")
+        logging.info("Verifying HOLE analysis results")
         radius_files = glob.glob(os.path.join(output_dir, "hole_analysis_*/*_radius.csv"))
         if not radius_files:
             raise RuntimeError("HOLE analysis did not generate expected radius files")
             
         # Now run SPEAR analysis
-        logger.info("Running SPEAR analysis")
+        logging.info("Running SPEAR analysis")
         results = spear.run_analysis(output_dir, category_df)
         
         # Perform strategic alignments
         # TODO look at parallelizing this
-        logger.info("Performing strategic alignments")
+        logging.info("Performing strategic alignments")
         for group_type, alignments in spear.alignment_groups.items():
             group_dir = os.path.join(output_dir, f"alignments_{group_type}")
             os.makedirs(group_dir, exist_ok=True)
@@ -564,7 +564,7 @@ def run_spear_pipeline(clean_dir: str, frtmalign_dir: str, frtmalign_path: str,
                 )
                 
         # Generate reports
-        logger.info("Generating reports")
+        logging.info("Generating reports")
         spear.generate_html_report(output_dir)
         spear.generate_analysis_summary(output_dir)
         

@@ -55,7 +55,15 @@ ident_sim_calc = frtmalign_module.ident_sim_calc
 
 if use_spear:
     print('Info: Running SPEAR pipeline analysis')
+    
+    # First do all the preprocessing steps (same as non-SPEAR path)
+    print('Info: Reading paths.txt.')
     paths = paths_dic(paths_file)
+    if not os.path.isfile(paths['structs_info']):
+        raise SystemExit('Error: File for structure info ' + paths['structs_info'] + ' does not exist.')
+
+    # establish structures to include in the analysis, as well as chain order and residues to be kept when cleaning files
+    print('Info: Reading xml file with structure info.')
     struct_info_dic, struct_info_df = xml_parser(paths['structs_info'])
     
     # Do preprocessing steps first (same as non-SPEAR path)
